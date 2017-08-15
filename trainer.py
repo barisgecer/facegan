@@ -1,7 +1,7 @@
 from __future__ import print_function
 
 import os
-import StringIO
+from io import StringIO
 import scipy.misc
 import numpy as np
 from glob import glob
@@ -256,8 +256,8 @@ class Trainer(object):
         for key, img in items.items():
             if img is None:
                 continue
-            if img.shape[3] in [1, 3]:
-                img = img.transpose([0, 3, 1, 2])
+            #if img.shape[3] in [1, 3]:
+            #    img = img.transpose([0, 3, 1, 2])
 
             x_path = os.path.join(path, '{}_D_{}.png'.format(idx, key))
             x = self.sess.run(self.AE_x, {self.x: img})

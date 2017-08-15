@@ -61,7 +61,7 @@ misc_arg.add_argument('--random_seed', type=int, default=123)
 def get_config():
     config, unparsed = parser.parse_known_args()
     if config.use_gpu:
-        data_format = 'NCHW'
+        data_format = 'NHWC' #'NCHW'
     else:
         data_format = 'NHWC'
     setattr(config, 'data_format', data_format)
