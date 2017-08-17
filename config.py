@@ -22,7 +22,7 @@ net_arg.add_argument('--z_num', type=int, default=64, choices=[64, 128])
 
 # Data
 data_arg = add_argument_group('Data')
-data_arg.add_argument('--dataset', type=str, default='CelebA')
+data_arg.add_argument('--dataset', type=str, default='celeba')
 data_arg.add_argument('--split', type=str, default='train')
 data_arg.add_argument('--batch_size', type=int, default=16)
 data_arg.add_argument('--grayscale', type=str2bool, default=False)
