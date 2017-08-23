@@ -58,6 +58,88 @@ misc_arg.add_argument('--sample_per_image', type=int, default=64,
                       help='# of sample per image during test sample generation')
 misc_arg.add_argument('--random_seed', type=int, default=123)
 
+# FaceGAN
+misc_arg.add_argument('--n_id', type=int, default=10, help='Number of different identities to be generated')
+misc_arg.add_argument('--facenet_scope', type=str, default='InceptionResnetV1', help='Facenet model scope name defined in --model_def')
+misc_arg.add_argument('--pretrained_facenet_model', type=str, default='facenet_model/model-20170511-185253.ckpt-80000', help='Pretrained facenet model')
+
+
+
+# FaceNet
+parser.add_argument('--logs_base_dir', type=str,
+                    help='Directory where to write event logs.', default='~/logs/facenet')
+parser.add_argument('--models_base_dir', type=str,
+                    help='Directory where to write trained models and checkpoints.', default='~/models/facenet')
+parser.add_argument('--gpu_memory_fraction', type=float,
+                    help='Upper bound on the amount of GPU memory that will be used by the process.', default=1.0)
+parser.add_argument('--pretrained_model', type=str,
+                    help='Load a pretrained model before training starts.')
+parser.add_argument('--model_def', type=str,
+                    help='Model definition. Points to a module containing the definition of the inference graph.',
+                    default='models.inception_resnet_v1')
+parser.add_argument('--max_nrof_epochs', type=int,
+                    help='Number of epochs to run.', default=500)
+parser.add_argument('--image_size', type=int,
+                    help='Image size (height, width) in pixels.', default=160)
+parser.add_argument('--epoch_size', type=int,
+                    help='Number of batches per epoch.', default=1000)
+parser.add_argument('--embedding_size', type=int,
+                    help='Dimensionality of the embedding.', default=128)
+parser.add_argument('--random_crop',
+                    help='Performs random cropping of training images. If false, the center image_size pixels from the training images are used. ' +
+                         'If the size of the images in the data directory is equal to image_size no cropping is performed',
+                    action='store_true')
+parser.add_argument('--random_flip',
+                    help='Performs random horizontal flipping of training images.', action='store_true')
+parser.add_argument('--random_rotate',
+                    help='Performs random rotations of training images.', action='store_true')
+parser.add_argument('--keep_probability', type=float,
+                    help='Keep probability of dropout for the fully connected layer(s).', default=1.0)
+parser.add_argument('--weight_decay', type=float,
+                    help='L2 weight regularization.', default=0.0)
+parser.add_argument('--center_loss_factor', type=float,
+                    help='Center loss factor.', default=0.0)
+parser.add_argument('--center_loss_alfa', type=float,
+                    help='Center update rate for center loss.', default=0.95)
+parser.add_argument('--learning_rate', type=float,
+                    help='Initial learning rate. If set to a negative value a learning rate ' +
+                         'schedule can be specified in the file "learning_rate_schedule.txt"', default=0.1)
+parser.add_argument('--learning_rate_decay_epochs', type=int,
+                    help='Number of epochs between learning rate decay.', default=100)
+parser.add_argument('--learning_rate_decay_factor', type=float,
+                    help='Learning rate decay factor.', default=1.0)
+parser.add_argument('--moving_average_decay', type=float,
+                    help='Exponential decay for tracking of training parameters.', default=0.9999)
+parser.add_argument('--seed', type=int,
+                    help='Random seed.', default=666)
+parser.add_argument('--nrof_preprocess_threads', type=int,
+                    help='Number of preprocessing (data loading and augmentation) threads.', default=4)
+parser.add_argument('--log_histograms',
+                    help='Enables logging of weight/bias histograms in tensorboard.', action='store_true')
+parser.add_argument('--learning_rate_schedule_file', type=str,
+                    help='File containing the learning rate schedule that is used when learning_rate is set to to -1.',
+                    default='data/learning_rate_schedule.txt')
+parser.add_argument('--filter_filename', type=str,
+                    help='File containing image data used for dataset filtering', default='')
+parser.add_argument('--filter_percentile', type=float,
+                    help='Keep only the percentile images closed to its class center', default=100.0)
+parser.add_argument('--filter_min_nrof_images_per_class', type=int,
+                    help='Keep only the classes with this number of examples or more', default=0)
+
+# Parameters for validation on LFW
+parser.add_argument('--lfw_pairs', type=str,
+                    help='The file containing the pairs to use for validation.', default='data/pairs.txt')
+parser.add_argument('--lfw_file_ext', type=str,
+                    help='The file extension for the LFW dataset.', default='jpg', choices=['jpg', 'png'])
+parser.add_argument('--lfw_dir', type=str,
+                    help='Path to the data directory containing aligned face patches.', default='')
+parser.add_argument('--lfw_batch_size', type=int,
+                    help='Number of images to process in a batch in the LFW test set.', default=100)
+parser.add_argument('--lfw_nrof_folds', type=int,
+                    help='Number of folds to use for cross validation. Mainly used for testing.', default=10)
+
+
+
 def get_config():
     config, unparsed = parser.parse_known_args()
     if config.use_gpu:

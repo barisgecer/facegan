@@ -5,7 +5,7 @@ import tensorflow as tf
 
 def get_loader(root, batch_size, scale_size, data_format, split=None, is_grayscale=False, seed=None):
     dataset_name = os.path.basename(root)
-    if dataset_name in ['CelebA'] and split:
+    if dataset_name in ['CelebA'] and split: #TODO: fix this
         root = os.path.join(root, 'splits', split)
 
     for ext in ["jpg", "png"]:
@@ -40,7 +40,7 @@ def get_loader(root, batch_size, scale_size, data_format, split=None, is_graysca
         num_threads=4, capacity=capacity,
         min_after_dequeue=min_after_dequeue, name='synthetic_inputs')
 
-    if dataset_name in ['CelebA']:
+    if dataset_name in ['CelebA']: #TODO: fix this
         queue = tf.image.crop_to_bounding_box(queue, 50, 25, 128, 128)
         queue = tf.image.resize_nearest_neighbor(queue, [scale_size, scale_size])
     else:
