@@ -55,9 +55,11 @@ def slerp(val, low, high):
 
 
 class Trainer(object):
-    def __init__(self, config, data_loader):
+    def __init__(self, config, data_loader, syn_image, syn_label):
         self.config = config
         self.data_loader = data_loader
+        self.syn_image = syn_image
+        self.syn_label = syn_label
         self.dataset = config.dataset
 
         self.beta1 = config.beta1
@@ -133,8 +135,11 @@ class Trainer(object):
         z_fixed = np.random.uniform(-1, 1, size=(self.batch_size, self.z_num))
         alpha_id_fixed = np.repeat(np.random.randint(self.n_id, size=(int(np.floor(self.batch_size / 4.0)),1)) + 1, 4,0)
 
-        x_fixed = self.get_image_from_loader()
+        x_fixed = self.get_image_from_loader(self.data_loader)
         save_image(x_fixed, '{}/x_fixed.png'.format(self.model_dir))
+
+        syn_fixed = self.get_image_from_loader(self.syn_image)
+        save_image(syn_fixed, '{}/syn_fixed.png'.format(self.model_dir))
 
         prev_measure = 1
         measure_history = deque([0]*self.lr_update_step, self.lr_update_step)
@@ -170,7 +175,7 @@ class Trainer(object):
                       format(step, self.max_step, d_loss, g_loss, c_loss, measure, k_t))
 
             if step % (self.log_step * 10) == 0:
-                x_fake = self.generate(z_fixed, alpha_id_fixed, self.model_dir, idx=step)
+                x_fake = self.generate(syn_fixed, alpha_id_fixed, self.model_dir, idx=step)
                 self.autoencode(x_fixed, self.model_dir, idx=step, x_fake=x_fake)
 
             if step % self.lr_update_step == self.lr_update_step - 1:
@@ -182,28 +187,37 @@ class Trainer(object):
     def build_model(self):
         self.x = self.data_loader
         x = norm_img(self.x)
+
         self.z = tf.random_uniform(
             (tf.shape(x)[0], self.z_num), minval=-1.0, maxval=1.0)
         self.k_t = tf.Variable(0., trainable=False, name='k_t')
 
-        self.alpha_id = tf.random_uniform((tf.shape(x)[0], 1), dtype=tf.int32, maxval=self.n_id)
-        alpha_id_onehot = tf.squeeze(tf.one_hot(self.alpha_id, depth=self.n_id, on_value=1.0, off_value=0.0),1)
+        #self.alpha_id = tf.random_uniform((tf.shape(x)[0], 1), dtype=tf.int32, maxval=self.n_id)
+        #alpha_id_onehot = tf.squeeze(tf.one_hot(self.alpha_id, depth=self.n_id, on_value=1.0, off_value=0.0),1)
+        self.alpha_id = self.syn_label
 
-        G, self.G_var = GeneratorCNN(
-            tf.concat([self.z, alpha_id_onehot], 1), self.conv_hidden_num, self.channel,
+        G, self.G_var = create_generator(
+            norm_img(self.syn_image), self.conv_hidden_num, self.channel,
             self.repeat_num, self.data_format, reuse=False)
+
+        #G, self.G_var = GeneratorCNN(
+        #    tf.concat([self.z, alpha_id_onehot], 1), self.conv_hidden_num, self.channel,
+        #    self.repeat_num, self.data_format, reuse=False)
 
         d_out, self.D_z, self.D_var = DiscriminatorCNN(
             tf.concat([G, x], 0), self.channel, self.z_num, self.repeat_num,
             self.conv_hidden_num, self.data_format)
         AE_G, AE_x = tf.split(d_out, 2)
+        #G2C = tf.image.resize_bilinear(G,[160,160])
+        #G2C = tf.map_fn(lambda im: tf.image.per_image_standardization(im), G2C)
+        #G2C = tf.image.per_image_standardization(G2C)
+        #C = ModuleC(self.config)
+        #self.c_loss, self.C_var, self.C_logits_var = \
+        #    C.getNetwork(image=G2C,
+        #                 label_batch=self.alpha_id,nrof_classes=self.n_id)
 
         self.G = denorm_img(G, self.data_format)
         self.AE_G, self.AE_x = denorm_img(AE_G, self.data_format), denorm_img(AE_x, self.data_format)
-
-        C = ModuleC(self.config)
-        self.c_loss, self.C_var, self.C_logits_var = \
-            C.getNetwork(image=tf.image.resize_bilinear(self.G,[160,160]),label_batch=tf.squeeze(self.alpha_id,1),nrof_classes=self.n_id)
 
         if self.optimizer == 'adam':
             optimizer = tf.train.AdamOptimizer
@@ -217,11 +231,14 @@ class Trainer(object):
 
         self.d_loss = self.d_loss_real - self.k_t * self.d_loss_fake
         self.g_loss = tf.reduce_mean(tf.abs(AE_G - G))
-        self.g_c_loss = self.g_loss + 0.01 * self.c_loss
+        self.g_c_loss = self.g_loss #+ 0.01 * self.c_loss
+        self.c_loss = self.g_loss
 
         d_optim = d_optimizer.minimize(self.d_loss, var_list=self.D_var)
-        g_optim = g_optimizer.minimize(self.g_c_loss, global_step=self.step, var_list=self.G_var + self.C_var + self.C_logits_var)
+    #   g_optim = g_optimizer.minimize(self.g_c_loss, global_step=self.step, var_list=self.G_var + self.C_var + self.C_logits_var)
 
+        g_optim = g_optimizer.minimize(self.g_c_loss, global_step=self.step,
+                               var_list=self.G_var )
         self.balance = self.gamma * self.d_loss_real - self.g_loss
         self.measure = self.d_loss_real + tf.abs(self.balance)
 
@@ -266,7 +283,7 @@ class Trainer(object):
         self.sess.run(tf.variables_initializer(test_variables))
 
     def generate(self, inputs, alpha_id_fix, root_path=None, path=None, idx=None, save=True):
-        x = self.sess.run(self.G, {self.z: inputs, self.alpha_id: alpha_id_fix})
+        x = self.sess.run(self.G, {self.syn_image: inputs})
         if path is None and save:
             path = os.path.join(root_path, '{}_G.png'.format(idx))
             save_image(x, path)
@@ -344,8 +361,8 @@ class Trainer(object):
 
         all_G_z = None
         for step in range(3):
-            real1_batch = self.get_image_from_loader()
-            real2_batch = self.get_image_from_loader()
+            real1_batch = self.get_image_from_loader(self.data_loader)
+            real2_batch = self.get_image_from_loader(self.data_loader)
 
             save_image(real1_batch, os.path.join(root_path, 'test{}_real1.png'.format(step)))
             save_image(real2_batch, os.path.join(root_path, 'test{}_real2.png'.format(step)))
@@ -369,8 +386,8 @@ class Trainer(object):
 
         save_image(all_G_z, '{}/all_G_z.png'.format(root_path), nrow=16)
 
-    def get_image_from_loader(self):
-        x = self.data_loader.eval(session=self.sess)
+    def get_image_from_loader(self, data_loader):
+        x = data_loader.eval(session=self.sess)
         if self.data_format == 'NCHW':
             x = x.transpose([0, 2, 3, 1])
         return x

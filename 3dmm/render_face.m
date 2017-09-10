@@ -3,8 +3,8 @@ function fig = render_face(BFM, alpha, gamma, beta, varargin )
 % Render it
 rp.phi = 0; %1.2
 rp.rho = 0; %0.2
-rp.width = 182;
-rp.height = 160;
+rp.width = 128;%182;
+rp.height = 112;%160;
 rp.light = [0 0]; % azimuth and elevation % 120 60
 rp.material = [.5, .5, .1, 1 ]; %'dull'
 rp.light_color = [1 1 1];
