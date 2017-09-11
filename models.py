@@ -19,7 +19,7 @@ def GeneratorCNN(z, hidden_num, output_num, repeat_num, data_format, reuse):
     variables = tf.contrib.framework.get_variables(vs)
     return out, variables
 
-def create_generator(z, hidden_num, output_num, repeat_num, data_format, reuse):
+def create_generator(z, hidden_num, output_num, repeat_num, data_format, reuse,scope="G"):
 
     def conv(batch_input, out_channels, stride):
         with tf.variable_scope("conv"):
@@ -67,7 +67,7 @@ def create_generator(z, hidden_num, output_num, repeat_num, data_format, reuse):
             x = tf.identity(x)
             return (0.5 * (1 + a)) * x + (0.5 * (1 - a)) * tf.abs(x)
 
-    with tf.variable_scope("G", reuse=reuse) as vs:
+    with tf.variable_scope(scope, reuse=reuse) as vs:
         layers = []
 
         # encoder_1: [batch, 256, 256, in_channels] => [batch, 128, 128, ngf]

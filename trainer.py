@@ -200,6 +200,11 @@ class Trainer(object):
             norm_img(self.syn_image), self.conv_hidden_num, self.channel,
             self.repeat_num, self.data_format, reuse=False)
 
+
+        F, self.F_var = create_generator(
+            G, self.conv_hidden_num, self.channel,
+            self.repeat_num, self.data_format, reuse=False,scope="F")
+
         #G, self.G_var = GeneratorCNN(
         #    tf.concat([self.z, alpha_id_onehot], 1), self.conv_hidden_num, self.channel,
         #    self.repeat_num, self.data_format, reuse=False)
@@ -224,7 +229,7 @@ class Trainer(object):
         else:
             raise Exception("[!] Caution! Paper didn't use {} opimizer other than Adam".format(self.config.optimizer))
 
-        g_optimizer, d_optimizer = optimizer(self.g_lr), optimizer(self.d_lr)
+        g_optimizer,f_optimizer, d_optimizer = optimizer(self.g_lr),optimizer(self.g_lr), optimizer(self.d_lr)
 
         self.d_loss_real = tf.reduce_mean(tf.abs(AE_x - x))
         self.d_loss_fake = tf.reduce_mean(tf.abs(AE_G - G))
@@ -233,12 +238,14 @@ class Trainer(object):
         self.g_loss = tf.reduce_mean(tf.abs(AE_G - G))
         self.g_c_loss = self.g_loss #+ 0.01 * self.c_loss
         self.c_loss = self.g_loss
+        self.f_loss = tf.reduce_mean(tf.abs(F - norm_img(self.syn_image)))
 
         d_optim = d_optimizer.minimize(self.d_loss, var_list=self.D_var)
     #   g_optim = g_optimizer.minimize(self.g_c_loss, global_step=self.step, var_list=self.G_var + self.C_var + self.C_logits_var)
 
-        g_optim = g_optimizer.minimize(self.g_c_loss, global_step=self.step,
-                               var_list=self.G_var )
+        g_optim = g_optimizer.minimize(self.g_c_loss, global_step=self.step, var_list=self.G_var )
+        f_optim = f_optimizer.minimize(self.f_loss, global_step=self.step, var_list=self.F_var )
+
         self.balance = self.gamma * self.d_loss_real - self.g_loss
         self.measure = self.d_loss_real + tf.abs(self.balance)
 
