@@ -78,7 +78,7 @@ def get_syn_loader(root, batch_size, scale_size, data_format, split=None, is_gra
 
     labels = []
     for im in paths:
-        labels.append(int(im.split("\\")[1]))
+        labels.append(int(im.replace('\\','/').split('/')[-2]))
     n_id = max(labels)
 
     images = tf.convert_to_tensor(list(paths))
