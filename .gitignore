@@ -5,6 +5,7 @@ data/gaze
 data/*
 samples
 outputs
+.idea
 
 # ipython checkpoints
 .ipynb_checkpoints
