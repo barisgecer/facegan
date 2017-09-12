@@ -40,11 +40,11 @@ def get_loader(root, batch_size, scale_size, data_format, split=None, is_graysca
         num_threads=4, capacity=capacity,
         min_after_dequeue=min_after_dequeue, name='synthetic_inputs')
 
-    if dataset_name in ['celeba']: #TODO: fix this
-        queue = tf.image.crop_to_bounding_box(queue, 50, 25, 128, 128)
-        queue = tf.image.resize_nearest_neighbor(queue, [scale_size, scale_size])
-    else:
-        queue = tf.image.resize_nearest_neighbor(queue, [scale_size, scale_size])
+    #if dataset_name in ['celeba']: #TODO: fix this
+    queue = tf.image.crop_to_bounding_box(queue, 50, 25, 128, 128)
+    queue = tf.image.resize_nearest_neighbor(queue, [scale_size, scale_size])
+    #else:
+    #    queue = tf.image.resize_nearest_neighbor(queue, [scale_size, scale_size])
 
     if data_format == 'NCHW':
         queue = tf.transpose(queue, [0, 3, 1, 2])
@@ -108,11 +108,11 @@ def get_syn_loader(root, batch_size, scale_size, data_format, split=None, is_gra
         num_threads=4, capacity=capacity,
         min_after_dequeue=min_after_dequeue, name='synthetic_inputs')
 
-    if dataset_name in ['CelebA']:  # TODO: fix this
-        queue_image = tf.image.crop_to_bounding_box(queue_image, 50, 25, 128, 128)
-        queue_image = tf.image.resize_nearest_neighbor(queue_image, [scale_size, scale_size])
-    else:
-        queue_image = tf.image.resize_nearest_neighbor(queue_image, [scale_size, scale_size])
+    #if dataset_name in ['celeba']:  # TODO: fix this
+    queue_image = tf.image.crop_to_bounding_box(queue_image, 20, 20, 84, 84)
+    queue_image = tf.image.resize_nearest_neighbor(queue_image, [scale_size, scale_size])
+    #else:
+    #    queue_image = tf.image.resize_nearest_neighbor(queue_image, [scale_size, scale_size])
 
     if data_format == 'NCHW':
         queue_image = tf.transpose(queue_image, [0, 3, 1, 2])

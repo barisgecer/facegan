@@ -174,7 +174,7 @@ class Trainer(object):
                 print("[{}/{}] Loss_D: {:.6f} Loss_G: {:.6f} Loss_C: {:.6f} measure: {:.4f}, k_t: {:.4f}". \
                       format(step, self.max_step, d_loss, g_loss, c_loss, measure, k_t))
 
-            if step % (self.log_step * 10) == 0:
+            if step % (self.log_step * self.save_step) == 0:
                 x_fake = self.generate(syn_fixed, alpha_id_fixed, self.model_dir, idx=step)
                 self.autoencode(x_fixed, self.model_dir, idx=step, x_fake=x_fake)
 
