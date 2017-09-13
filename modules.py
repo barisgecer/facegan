@@ -37,11 +37,22 @@ class ModuleC(object):
         variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.config.facenet_scope)
         logit_variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Logits')
 
-        sess = tf.Session()
-        saver = tf.train.Saver(variables)
-        with sess.as_default():
-            saver.restore(sess,self.config.pretrained_facenet_model)
         return total_loss, variables, logit_variables
 
+
+    def getFirstConv(self,image,reuse=None):
+        with slim.arg_scope([slim.conv2d, slim.fully_connected],normalizer_fn=slim.batch_norm):
+            with tf.variable_scope('InceptionResnetV1', 'InceptionResnetV1', [image], reuse=reuse):
+                with slim.arg_scope([slim.batch_norm, slim.dropout], is_training=True):
+                    with slim.arg_scope([slim.conv2d, slim.max_pool2d, slim.avg_pool2d],
+                                        stride=1, padding='SAME'):
+                        # 149 x 149 x 32
+                        net = slim.conv2d(image, 32, 3, stride=2, padding='VALID', scope='Conv2d_1a_3x3')
+                        # 147 x 147 x 32
+                        net = slim.conv2d(net, 32, 3, padding='VALID', scope='Conv2d_2a_3x3')
+
+        variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.config.facenet_scope)
+
+        return net, variables
 
 

@@ -103,11 +103,14 @@ class Trainer(object):
         self.lr_update_step = config.lr_update_step
 
         self.is_train = config.is_train
-        self.build_model()
+        pretrained_var = self.build_model()
 
         self.saver = tf.train.Saver()
         self.summary_writer = tf.summary.FileWriter(self.model_dir)
 
+        pre_train_saver = tf.train.Saver(pretrained_var)
+        def load_pretrain(sess):
+            pre_train_saver.restore(sess, self.config.pretrained_facenet_model)
 
         sv = tf.train.Supervisor(logdir=self.model_dir,
                                  is_chief=True,
@@ -116,7 +119,8 @@ class Trainer(object):
                                  summary_writer=self.summary_writer,
                                  save_model_secs=300,
                                  global_step=self.step,
-                                 ready_for_local_init_op=None)
+                                 ready_for_local_init_op=None,
+                                 init_fn=load_pretrain)
 
         gpu_options = tf.GPUOptions(allow_growth=True)
         sess_config = tf.ConfigProto(allow_soft_placement=True,
@@ -200,26 +204,16 @@ class Trainer(object):
             norm_img(self.syn_image), self.conv_hidden_num, self.channel,
             self.repeat_num, self.data_format, reuse=False)
 
+        C = ModuleC(self.config)
 
-        F, self.F_var = create_generator(
-            G, self.conv_hidden_num, self.channel,
-            self.repeat_num, self.data_format, reuse=False,scope="F")
+        F_conv, F_conv_var = C.getFirstConv( norm_img(self.syn_image))
 
-        #G, self.G_var = GeneratorCNN(
-        #    tf.concat([self.z, alpha_id_onehot], 1), self.conv_hidden_num, self.channel,
-        #    self.repeat_num, self.data_format, reuse=False)
+        G_conv, G_conv_var = C.getFirstConv( G, True)
 
         d_out, self.D_z, self.D_var = DiscriminatorCNN(
             tf.concat([G, x], 0), self.channel, self.z_num, self.repeat_num,
             self.conv_hidden_num, self.data_format)
         AE_G, AE_x = tf.split(d_out, 2)
-        #G2C = tf.image.resize_bilinear(G,[160,160])
-        #G2C = tf.map_fn(lambda im: tf.image.per_image_standardization(im), G2C)
-        #G2C = tf.image.per_image_standardization(G2C)
-        #C = ModuleC(self.config)
-        #self.c_loss, self.C_var, self.C_logits_var = \
-        #    C.getNetwork(image=G2C,
-        #                 label_batch=self.alpha_id,nrof_classes=self.n_id)
 
         self.G = denorm_img(G, self.data_format)
         self.AE_G, self.AE_x = denorm_img(AE_G, self.data_format), denorm_img(AE_x, self.data_format)
@@ -238,13 +232,12 @@ class Trainer(object):
         self.g_loss = tf.reduce_mean(tf.abs(AE_G - G))
         self.g_c_loss = self.g_loss #+ 0.01 * self.c_loss
         self.c_loss = self.g_loss
-        self.f_loss = tf.reduce_mean(tf.abs(F - norm_img(self.syn_image)))
+        self.f_loss = tf.reduce_mean(tf.abs(F_conv - G_conv))
 
         d_optim = d_optimizer.minimize(self.d_loss, var_list=self.D_var)
-    #   g_optim = g_optimizer.minimize(self.g_c_loss, global_step=self.step, var_list=self.G_var + self.C_var + self.C_logits_var)
 
         g_optim = g_optimizer.minimize(self.g_c_loss, global_step=self.step, var_list=self.G_var )
-        f_optim = f_optimizer.minimize(self.f_loss, global_step=self.step, var_list=self.F_var )
+        f_optim = f_optimizer.minimize(self.f_loss, global_step=self.step )
 
         self.balance = self.gamma * self.d_loss_real - self.g_loss
         self.measure = self.d_loss_real + tf.abs(self.balance)
@@ -253,8 +246,15 @@ class Trainer(object):
             self.k_update = tf.assign(
                 self.k_t, tf.clip_by_value(self.k_t + self.lambda_k * self.balance, 0, 1))
 
+        kernel = G_conv_var[0]
+        x_min = tf.reduce_min(kernel)
+        x_max = tf.reduce_max(kernel)
+        kernel_0_to_1 = (kernel - x_min) / (x_max - x_min)
+        kernel_transposed = tf.transpose(kernel_0_to_1, [3, 0, 1, 2])
         self.summary_op = tf.summary.merge([
             tf.summary.image("G", self.G),
+            tf.summary.image("filters", kernel_transposed),
+            #tf.summary.image("F", tf.slice(F_conv,[0,0,0,0],[8,61,61,1])),
             tf.summary.image("AE_G", self.AE_G),
             tf.summary.image("AE_x", self.AE_x),
 
@@ -270,6 +270,7 @@ class Trainer(object):
             tf.summary.scalar("misc/g_lr", self.g_lr),
             tf.summary.scalar("misc/balance", self.balance),
         ])
+        return F_conv_var
 
     def build_test_model(self):
         with tf.variable_scope("test") as vs:
