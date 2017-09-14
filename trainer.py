@@ -13,7 +13,7 @@ from models import *
 from modules import ModuleC
 from utils import save_image
 
-
+#denemes
 def next(loader):
     return loader.next()[0].data.numpy()
 
@@ -200,13 +200,15 @@ class Trainer(object):
         #alpha_id_onehot = tf.squeeze(tf.one_hot(self.alpha_id, depth=self.n_id, on_value=1.0, off_value=0.0),1)
         self.alpha_id = self.syn_label
 
+        self.y = self.syn_image
+
         G, self.G_var = create_generator(
-            norm_img(self.syn_image), self.conv_hidden_num, self.channel,
+            norm_img(self.y ), self.conv_hidden_num, self.channel,
             self.repeat_num, self.data_format, reuse=False)
 
         C = ModuleC(self.config)
 
-        F_conv, F_conv_var = C.getFirstConv( norm_img(self.syn_image))
+        F_conv, F_conv_var = C.getFirstConv( norm_img(self.y ))
 
         G_conv, G_conv_var = C.getFirstConv( G, True)
 
@@ -230,14 +232,13 @@ class Trainer(object):
 
         self.d_loss = self.d_loss_real - self.k_t * self.d_loss_fake
         self.g_loss = tf.reduce_mean(tf.abs(AE_G - G))
-        self.g_c_loss = self.g_loss #+ 0.01 * self.c_loss
         self.c_loss = self.g_loss
         self.f_loss = tf.reduce_mean(tf.abs(F_conv - G_conv))
 
         d_optim = d_optimizer.minimize(self.d_loss, var_list=self.D_var)
 
-        g_optim = g_optimizer.minimize(self.g_c_loss, global_step=self.step, var_list=self.G_var )
-        f_optim = f_optimizer.minimize(self.f_loss, global_step=self.step )
+        self.final_loss = self.g_loss + 0.01 * self.c_loss + self.f_loss
+        g_optim = g_optimizer.minimize(self.final_loss, global_step=self.step, var_list=self.G_var )
 
         self.balance = self.gamma * self.d_loss_real - self.g_loss
         self.measure = self.d_loss_real + tf.abs(self.balance)
@@ -260,7 +261,9 @@ class Trainer(object):
 
             tf.summary.scalar("loss/d_loss", self.d_loss),
             tf.summary.scalar("loss/c_loss", self.c_loss),
-            tf.summary.scalar("loss/g_c_loss", self.g_c_loss),
+            tf.summary.scalar("loss/f_loss", self.f_loss),
+            tf.summary.scalar("loss/g_loss", self.g_loss),
+            tf.summary.scalar("loss/final_loss", self.final_loss),
             tf.summary.scalar("loss/d_loss_real", self.d_loss_real),
             tf.summary.scalar("loss/d_loss_fake", self.d_loss_fake),
             tf.summary.scalar("loss/g_loss", self.g_loss),
@@ -291,7 +294,7 @@ class Trainer(object):
         self.sess.run(tf.variables_initializer(test_variables))
 
     def generate(self, inputs, alpha_id_fix, root_path=None, path=None, idx=None, save=True):
-        x = self.sess.run(self.G, {self.syn_image: inputs})
+        x = self.sess.run(self.G, {self.y: inputs})
         if path is None and save:
             path = os.path.join(root_path, '{}_G.png'.format(idx))
             save_image(x, path)
