@@ -101,11 +101,14 @@ class Trainer(object):
         self.lr_update_step = config.lr_update_step
 
         self.is_train = config.is_train
-        self.build_model()
+        pretrained_var = self.build_model()
 
         self.saver = tf.train.Saver()
         self.summary_writer = tf.summary.FileWriter(self.model_dir)
 
+        pre_train_saver = tf.train.Saver(pretrained_var)
+        def load_pretrain(sess):
+            pre_train_saver.restore(sess, self.config.pretrained_facenet_model)
 
         sv = tf.train.Supervisor(logdir=self.model_dir,
                                  is_chief=True,
@@ -114,7 +117,8 @@ class Trainer(object):
                                  summary_writer=self.summary_writer,
                                  save_model_secs=300,
                                  global_step=self.step,
-                                 ready_for_local_init_op=None)
+                                 ready_for_local_init_op=None,
+                                 init_fn=load_pretrain)
 
         gpu_options = tf.GPUOptions(allow_growth=True)
         sess_config = tf.ConfigProto(allow_soft_placement=True,
@@ -220,7 +224,7 @@ class Trainer(object):
         self.g_c_loss = self.g_loss + 0.01 * self.c_loss
 
         d_optim = d_optimizer.minimize(self.d_loss, var_list=self.D_var)
-        g_optim = g_optimizer.minimize(self.g_c_loss, global_step=self.step, var_list=self.G_var + self.C_var + self.C_logits_var)
+        g_optim = g_optimizer.minimize(self.g_c_loss, global_step=self.step, var_list=self.G_var + self.C_logits_var)
 
         self.balance = self.gamma * self.d_loss_real - self.g_loss
         self.measure = self.d_loss_real + tf.abs(self.balance)
@@ -246,6 +250,7 @@ class Trainer(object):
             tf.summary.scalar("misc/g_lr", self.g_lr),
             tf.summary.scalar("misc/balance", self.balance),
         ])
+        return self.C_var
 
     def build_test_model(self):
         with tf.variable_scope("test") as vs:
