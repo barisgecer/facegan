@@ -205,9 +205,11 @@ class Trainer(object):
         self.G = denorm_img(G, self.data_format)
         self.AE_G, self.AE_x = denorm_img(AE_G, self.data_format), denorm_img(AE_x, self.data_format)
 
+        C_input = tf.image.resize_bilinear(self.G, [160, 160])
+        C_input = tf.map_fn(lambda frame: tf.image.per_image_standardization(frame), C_input)
         C = ModuleC(self.config)
         self.c_loss, self.C_var, self.C_logits_var = \
-            C.getNetwork(image=tf.image.resize_bilinear(self.G,[160,160]),label_batch=tf.squeeze(self.alpha_id,1),nrof_classes=self.n_id)
+            C.getNetwork(image=C_input,label_batch=tf.squeeze(self.alpha_id,1),nrof_classes=self.n_id)
 
         if self.optimizer == 'adam':
             optimizer = tf.train.AdamOptimizer
