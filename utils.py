@@ -7,6 +7,8 @@ import logging
 import numpy as np
 from PIL import Image
 from datetime import datetime
+from shutil import copy2
+from glob import glob
 
 def prepare_dirs_and_logger(config):
     formatter = logging.Formatter("%(asctime)s:%(levelname)s::%(message)s")
@@ -38,6 +40,12 @@ def prepare_dirs_and_logger(config):
     for path in [config.log_dir, config.data_dir, config.model_dir]:
         if not os.path.exists(path):
             os.makedirs(path)
+
+    src_path = os.path.join(config.model_dir, 'src')
+    if not os.path.exists(src_path):
+        os.makedirs(src_path)
+    for path in glob("*.py"):
+        copy2(path, src_path)
 
 def get_time():
     return datetime.now().strftime("%m%d_%H%M%S")
