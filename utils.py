@@ -24,12 +24,12 @@ def prepare_dirs_and_logger(config):
         if config.load_path.startswith(config.log_dir):
             config.model_dir = config.load_path
         else:
-            if config.load_path.startswith(config.dataset):
+            if config.load_path.startswith(config.task):
                 config.model_name = config.load_path
             else:
-                config.model_name = "{}_{}".format(config.dataset, config.load_path)
+                config.model_name = "{}_{}".format(config.task, config.load_path)
     else:
-        config.model_name = "{}_{}".format(config.dataset, get_time())
+        config.model_name = "{}_{}".format(config.task, get_time())
 
     if not hasattr(config, 'model_dir'):
         config.model_dir = os.path.join(config.log_dir, config.model_name)
