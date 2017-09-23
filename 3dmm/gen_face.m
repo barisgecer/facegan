@@ -44,5 +44,5 @@ rp.rho = rand*0.1-0.05;%0.4-0.2;
 %rp.light_color(rp.light_color>1) = 1;
 
 % Render Face here
-render_face(BFM, alpha, gamma, beta,rp);
+[fig, rp] = render_face(BFM, alpha, gamma, beta,rp);
 im = print('-RGBImage','-opengl','-r0');

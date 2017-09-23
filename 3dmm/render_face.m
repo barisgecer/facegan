@@ -1,4 +1,4 @@
-function fig = render_face(BFM, alpha, gamma, beta, varargin )
+function [fig, rp] = render_face(BFM, alpha, gamma, beta, varargin )
 
 % Render it
 rp.phi = 0; %1.2

@@ -157,7 +157,7 @@ class Trainer(object):
                 })
             result = self.sess.run(fetch_dict)
 
-            measure = result['measure']+4
+            measure = result['measure']
             measure_history.append(measure)
 
             if step % self.log_step == 0:
@@ -196,9 +196,9 @@ class Trainer(object):
         self.y = self.syn_image
         self.mask = tf.cast(tf.greater(self.y, 0), tf.float32)
 
-        G, self.G_var = create_generator(
-            norm_img(self.y ), self.conv_hidden_num, self.channel,
-            self.repeat_num, self.data_format, reuse=False)
+        G, self.G_var = GeneratorCNN(
+                self.z, self.conv_hidden_num, self.channel,
+                self.repeat_num, self.data_format, reuse=False)
 
         d_out, self.D_z, self.D_var = DiscriminatorCNN(
             tf.concat([G, x], 0), self.channel, self.z_num, self.repeat_num,
@@ -224,7 +224,7 @@ class Trainer(object):
 
         d_optim = d_optimizer.minimize(self.d_loss, var_list=self.D_var)
 
-        self.final_loss = self.g_loss + self.f_loss
+        self.final_loss = self.g_loss #+ self.f_loss
         g_optim = g_optimizer.minimize(self.final_loss, global_step=self.step, var_list=self.G_var )
 
         self.balance = self.gamma * self.d_loss_real - self.g_loss
