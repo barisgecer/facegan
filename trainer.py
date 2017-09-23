@@ -103,14 +103,10 @@ class Trainer(object):
         self.lr_update_step = config.lr_update_step
 
         self.is_train = config.is_train
-        pretrained_var = self.build_model()
+        self.build_model()
 
         self.saver = tf.train.Saver()
         self.summary_writer = tf.summary.FileWriter(self.model_dir)
-
-        pre_train_saver = tf.train.Saver(pretrained_var)
-        def load_pretrain(sess):
-            pre_train_saver.restore(sess, self.config.pretrained_facenet_model)
 
         sv = tf.train.Supervisor(logdir=self.model_dir,
                                  is_chief=True,
@@ -119,8 +115,7 @@ class Trainer(object):
                                  summary_writer=self.summary_writer,
                                  save_model_secs=300,
                                  global_step=self.step,
-                                 ready_for_local_init_op=None,
-                                 init_fn=load_pretrain)
+                                 ready_for_local_init_op=None)
 
         gpu_options = tf.GPUOptions(allow_growth=True)
         sess_config = tf.ConfigProto(allow_soft_placement=True,
@@ -158,7 +153,6 @@ class Trainer(object):
                     "summary": self.summary_op,
                     "g_loss": self.g_loss,
                     "d_loss": self.d_loss,
-                    "c_loss": self.c_loss,
                     "k_t": self.k_t,
                 })
             result = self.sess.run(fetch_dict)
@@ -172,11 +166,10 @@ class Trainer(object):
 
                 g_loss = result['g_loss']
                 d_loss = result['d_loss']
-                c_loss = result['c_loss']
                 k_t = result['k_t']
 
-                print("[{}/{}] Loss_D: {:.6f} Loss_G: {:.6f} Loss_C: {:.6f} measure: {:.4f}, k_t: {:.4f}". \
-                      format(step, self.max_step, d_loss, g_loss, c_loss, measure, k_t))
+                print("[{}/{}] Loss_D: {:.6f} Loss_G: {:.6f} measure: {:.4f}, k_t: {:.4f}". \
+                      format(step, self.max_step, d_loss, g_loss, measure, k_t))
 
             #if step % (self.log_step * self.save_step) == 0:
                 #x_fake = self.generate(syn_fixed, alpha_id_fixed, self.model_dir, idx=step)
@@ -201,16 +194,11 @@ class Trainer(object):
         self.alpha_id = self.syn_label
 
         self.y = self.syn_image
+        self.mask = tf.cast(tf.greater(self.y, 0), tf.float32)
 
         G, self.G_var = create_generator(
             norm_img(self.y ), self.conv_hidden_num, self.channel,
             self.repeat_num, self.data_format, reuse=False)
-
-        C = ModuleC(self.config)
-
-        F_conv, F_conv_var = C.getFirstConv( norm_img(self.y ))
-
-        G_conv, G_conv_var = C.getFirstConv( G, True)
 
         d_out, self.D_z, self.D_var = DiscriminatorCNN(
             tf.concat([G, x], 0), self.channel, self.z_num, self.repeat_num,
@@ -232,12 +220,11 @@ class Trainer(object):
 
         self.d_loss = self.d_loss_real - self.k_t * self.d_loss_fake
         self.g_loss = tf.reduce_mean(tf.abs(AE_G - G))
-        self.c_loss = self.g_loss
-        self.f_loss = tf.reduce_mean(tf.abs(F_conv - G_conv))
+        self.f_loss = self.config.reg_scale * tf.reduce_mean(self.mask*tf.abs(G - norm_img(self.y )))
 
         d_optim = d_optimizer.minimize(self.d_loss, var_list=self.D_var)
 
-        self.final_loss = self.g_loss + 0.01 * self.c_loss + self.f_loss
+        self.final_loss = self.g_loss + self.f_loss
         g_optim = g_optimizer.minimize(self.final_loss, global_step=self.step, var_list=self.G_var )
 
         self.balance = self.gamma * self.d_loss_real - self.g_loss
@@ -247,20 +234,21 @@ class Trainer(object):
             self.k_update = tf.assign(
                 self.k_t, tf.clip_by_value(self.k_t + self.lambda_k * self.balance, 0, 1))
 
-        kernel = G_conv_var[0]
-        x_min = tf.reduce_min(kernel)
-        x_max = tf.reduce_max(kernel)
-        kernel_0_to_1 = (kernel - x_min) / (x_max - x_min)
-        kernel_transposed = tf.transpose(kernel_0_to_1, [3, 0, 1, 2])
+        #kernel = G_conv_var[0]  #
+        #x_min = tf.reduce_min(kernel)
+        #x_max = tf.reduce_max(kernel)
+        #kernel_0_to_1 = (kernel - x_min) / (x_max - x_min)
+        #kernel_transposed = tf.transpose(kernel_0_to_1, [3, 0, 1, 2])
         self.summary_op = tf.summary.merge([
-            tf.summary.image("G", self.G),
-            tf.summary.image("filters", kernel_transposed),
+            tf.summary.image("Real Images", self.x),
+            tf.summary.image("Rendered Images", self.y),
+            tf.summary.image("Generated Images", self.G),
+            #tf.summary.image("filters", kernel_transposed),
             #tf.summary.image("F", tf.slice(F_conv,[0,0,0,0],[8,61,61,1])),
             tf.summary.image("AE_G", self.AE_G),
             tf.summary.image("AE_x", self.AE_x),
 
             tf.summary.scalar("loss/d_loss", self.d_loss),
-            tf.summary.scalar("loss/c_loss", self.c_loss),
             tf.summary.scalar("loss/f_loss", self.f_loss),
             tf.summary.scalar("loss/g_loss", self.g_loss),
             tf.summary.scalar("loss/final_loss", self.final_loss),
@@ -273,7 +261,6 @@ class Trainer(object):
             tf.summary.scalar("misc/g_lr", self.g_lr),
             tf.summary.scalar("misc/balance", self.balance),
         ])
-        return F_conv_var
 
     def build_test_model(self):
         with tf.variable_scope("test") as vs:

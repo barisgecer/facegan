@@ -36,6 +36,7 @@ def prepare_dirs_and_logger(config):
     if not hasattr(config, 'model_dir'):
         config.model_dir = os.path.join(config.log_dir, config.model_name)
     config.data_path = os.path.join(config.data_dir, config.dataset)
+    config.syn_data_dir = os.path.join(config.data_dir, config.syn_dataset)
 
     for path in [config.log_dir, config.data_dir, config.model_dir]:
         if not os.path.exists(path):
