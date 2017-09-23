@@ -6,7 +6,7 @@ clear temp;
 
 nId = 500;
 nImages = 200; % per Id
-data_dir = 'data';
+data_dir = 'c:/data/3dmm_norm';
 mkdir(data_dir);
 rng('default');
 for id =1:nId

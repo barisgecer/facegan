@@ -26,22 +26,22 @@ beta(1) = rand*12-4;
 
 %Expression
 rng(exp_seed);
-gamma = randn(n_exp_dim, 1)*1.8;
-gamma(gamma>2.5) = 2.5;
-gamma(gamma<-2.5) = -2.5;
+gamma = randn(n_exp_dim, 1)*0.6;%*1.8;
+gamma(gamma>1) = 1;%gamma(gamma>2.5) = 2.5;
+gamma(gamma<-1) = -1;%gamma(gamma<-2.5) = -2.5;
 gamma(randperm(n_exp_dim,n_exp_dim-7)) = 0;
 if gamma(1)>1 gamma(1)=1;end
 %Light
-rng(light_seed);
-rp.light = rand(1,2).*[120 30]-[60 30];
+%rng(light_seed);
+%rp.light = rand(1,2).*[120 30]-[60 30];
 %View
 rng(view_seed);
-rp.phi = rand*1.2-0.6;
-rp.rho = rand*0.4-0.2;
+rp.phi = rand*0.3-0.15;%1.2-0.6;
+rp.rho = rand*0.1-0.05;%0.4-0.2;
 %Light Color
-rng(brig_seed);
-rp.light_color = rand(1,1)/5+0.8 + randn(1,3)/50;
-rp.light_color(rp.light_color>1) = 1;
+%rng(brig_seed);
+%rp.light_color = rand(1,1)/5+0.8 + randn(1,3)/50;
+%rp.light_color(rp.light_color>1) = 1;
 
 % Render Face here
 render_face(BFM, alpha, gamma, beta,rp);
