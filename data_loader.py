@@ -72,6 +72,8 @@ def get_syn_loader(root, batch_size, scale_size, data_format, split=None, is_gra
         if len(paths) != 0:
             break
 
+    latentvars = [p.replace('jpg','txt').replace('png','txt') for p in paths]
+
     with Image.open(paths[0]) as img:
         w, h = img.size
         shape = [h, w, 3]
@@ -83,13 +85,18 @@ def get_syn_loader(root, batch_size, scale_size, data_format, split=None, is_gra
 
     images = tf.convert_to_tensor(list(paths))
     labels = tf.convert_to_tensor(labels)
+    latentvars = tf.convert_to_tensor(latentvars)
 
     # Makes an input queue
-    input_queue = tf.train.slice_input_producer([images, labels], shuffle=False, seed=seed)
+    input_queue = tf.train.slice_input_producer([images, labels, latentvars], shuffle=False, seed=seed)
     #reader = tf.WholeFileReader()
     #filename, data = reader.read(input_queue[0])
     image = tf_decode(tf.read_file(input_queue[0]), channels=3)
     label = input_queue[1]
+    reader = tf.TextLineReader()
+    #_, latentvar = reader.read(input_queue[2])
+    #latentvar = tf.cast(tf.string_split(latentvar,"\n"),tf.float32)
+    latentvar = tf.read_file(input_queue[2])
 
     #filename_queue = tf.train.string_input_producer(list(paths), shuffle=False, seed=seed)
     #reader = tf.WholeFileReader()
@@ -103,8 +110,8 @@ def get_syn_loader(root, batch_size, scale_size, data_format, split=None, is_gra
     min_after_dequeue = 5000
     capacity = min_after_dequeue + 3 * batch_size
 
-    queue_image, queue_label = tf.train.shuffle_batch(
-        [image, label], batch_size=batch_size,
+    queue_image, queue_label, queue_latentvar = tf.train.shuffle_batch(
+        [image, label, latentvar], batch_size=batch_size,
         num_threads=4, capacity=capacity,
         min_after_dequeue=min_after_dequeue, name='synthetic_inputs')
 
@@ -121,4 +128,4 @@ def get_syn_loader(root, batch_size, scale_size, data_format, split=None, is_gra
     else:
         raise Exception("[!] Unkown data_format: {}".format(data_format))
 
-    return tf.to_float(queue_image), queue_label, n_id
+    return tf.to_float(queue_image), queue_label,queue_latentvar, n_id

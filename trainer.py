@@ -55,11 +55,12 @@ def slerp(val, low, high):
 
 
 class Trainer(object):
-    def __init__(self, config, data_loader, syn_image, syn_label):
+    def __init__(self, config, data_loader, syn_image, syn_label, syn_latent):
         self.config = config
         self.data_loader = data_loader
         self.syn_image = syn_image
         self.syn_label = syn_label
+        self.syn_latent = syn_latent
         self.dataset = config.dataset
 
         self.beta1 = config.beta1
@@ -107,7 +108,7 @@ class Trainer(object):
 
         self.saver = tf.train.Saver()
         self.summary_writer = tf.summary.FileWriter(self.model_dir)
-
+        a = tf.string_to_number(tf.string_split(self.syn_latent, "\n"), tf.float32)
         sv = tf.train.Supervisor(logdir=self.model_dir,
                                  is_chief=True,
                                  saver=self.saver,
@@ -122,6 +123,8 @@ class Trainer(object):
                                      gpu_options=gpu_options)
 
         self.sess = sv.prepare_or_wait_for_session(config=sess_config)
+
+        print(self.sess.run(a))
 
         if not self.is_train:
             # dirty way to bypass graph finilization error

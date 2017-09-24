@@ -29,11 +29,11 @@ def main(config):
             data_path, config.batch_size, config.input_scale_size,
             config.data_format, config.split)
 
-    syn_image, syn_label, config.n_id = get_syn_loader(
+    syn_image, syn_label, syn_latent, config.n_id = get_syn_loader(
             config.syn_data_dir, config.batch_size, config.syn_scale_size,
             config.data_format, config.split)
 
-    trainer = Trainer(config, data_loader,syn_image,syn_label)
+    trainer = Trainer(config, data_loader,syn_image,syn_label, syn_latent)
 
     if config.is_train:
         save_config(config)
