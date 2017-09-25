@@ -19,6 +19,16 @@ def GeneratorCNN(z, hidden_num, output_num, repeat_num, data_format, reuse):
     variables = tf.contrib.framework.get_variables(vs)
     return out, variables
 
+
+def AddRealismLayers(x, hidden_num, repeat_num, data_format, reuse):
+    with tf.variable_scope("G_R", reuse=reuse) as vs:
+        for idx in range(repeat_num-1):
+            x = slim.conv2d(x, hidden_num, 3, 1, activation_fn=tf.nn.elu, data_format=data_format)
+        out = slim.conv2d(x, 3, 3, 1, activation_fn=None, data_format=data_format)
+
+    variables = tf.contrib.framework.get_variables(vs)
+    return out, variables
+
 def create_generator(z, hidden_num, output_num, repeat_num, data_format, reuse,scope="G"):
 
     def conv(batch_input, out_channels, stride):

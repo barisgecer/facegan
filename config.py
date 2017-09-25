@@ -1,6 +1,7 @@
 #-*- coding: utf-8 -*-
 import argparse
 from pygit2 import Repository
+import os.path
 
 def str2bool(v):
     return v.lower() in ('true', '1')
@@ -12,6 +13,15 @@ def add_argument_group(name):
     arg = parser.add_argument_group(name)
     arg_lists.append(arg)
     return arg
+
+def get_branch_name():
+    if os.path.isfile("branchname.txt"):
+        with open("branchname.txt", "rb") as file:
+            branchname = file.readline()
+    else:
+        branchname = Repository('.').head.shorthand
+        with open("branchname.txt", "w") as file:
+            file.write(branchname)
 
 # Network
 net_arg = add_argument_group('Network')
@@ -31,8 +41,8 @@ data_arg.add_argument('--num_worker', type=int, default=4)
 
 # Training / test parameters
 train_arg = add_argument_group('Training')
-train_arg.add_argument('--task', type=str, default=Repository('.').head.shorthand,
-                       help='default branch name')
+
+train_arg.add_argument('--task', type=str, default=get_branch_name(), help='default branch name')
 train_arg.add_argument('--is_train', type=str2bool, default=True)
 train_arg.add_argument('--optimizer', type=str, default='adam')
 train_arg.add_argument('--max_step', type=int, default=500000)

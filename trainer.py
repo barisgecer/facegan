@@ -132,9 +132,9 @@ class Trainer(object):
             self.build_test_model()
 
     def train_renderer(self):
-        for step in trange(self.start_step, self.max_step):
+        for step in trange(self.start_step, self.max_step/10):
             fetch_dict = {
-                "g_optim": self.g_optim,
+                "f_optim": self.f_optim,
                 "summary": self.summary_op,
             }
             result = self.sess.run(fetch_dict)
@@ -209,9 +209,11 @@ class Trainer(object):
         self.y = self.syn_image
         self.mask = tf.cast(tf.greater(self.y, 0), tf.float32)
 
-        G, self.G_var = GeneratorCNN(
+        F, self.F_var = GeneratorCNN(
                 self.syn_latent, self.conv_hidden_num, self.channel,
                 self.repeat_num, self.data_format, reuse=False)
+
+        G, self.G_var = AddRealismLayers(F,self.conv_hidden_num,2,self.data_format,reuse=False)
 
         d_out, self.D_z, self.D_var = DiscriminatorCNN(
             tf.concat([G, x], 0), self.channel, self.z_num, self.repeat_num,
@@ -233,12 +235,13 @@ class Trainer(object):
 
         self.d_loss = self.d_loss_real - self.k_t * self.d_loss_fake
         self.g_loss = tf.reduce_mean(tf.abs(AE_G - G))
-        self.f_loss = self.config.reg_scale * tf.reduce_mean(self.mask*tf.abs(G - norm_img(self.y )))
+        self.f_loss =  tf.reduce_mean(self.mask*tf.abs(F - norm_img(self.y )))
 
         d_optim = d_optimizer.minimize(self.d_loss, var_list=self.D_var)
 
-        self.final_loss = self.f_loss #+ self.f_loss
-        self.g_optim = g_optimizer.minimize(self.final_loss, global_step=self.step, var_list=self.G_var )
+        self.g_optim = g_optimizer.minimize(self.g_loss + self.config.reg_scale *self.f_loss, global_step=self.step, var_list=self.G_var+self.F_var )
+
+        self.f_optim = f_optimizer.minimize(self.f_loss, global_step=self.step, var_list=self.F_var )
 
         self.balance = self.gamma * self.d_loss_real - self.g_loss
         self.measure = self.d_loss_real + tf.abs(self.balance)
