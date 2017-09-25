@@ -37,7 +37,7 @@ def main(config):
 
     if config.is_train:
         save_config(config)
-        trainer.train()
+        trainer.train_renderer()
     else:
         if not config.load_path:
             raise Exception("[!] You should specify `load_path` to load a pretrained model")

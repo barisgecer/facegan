@@ -108,7 +108,6 @@ class Trainer(object):
 
         self.saver = tf.train.Saver()
         self.summary_writer = tf.summary.FileWriter(self.model_dir)
-        a = tf.string_to_number(tf.string_split(self.syn_latent, "\n"), tf.float32)
         sv = tf.train.Supervisor(logdir=self.model_dir,
                                  is_chief=True,
                                  saver=self.saver,
@@ -124,7 +123,6 @@ class Trainer(object):
 
         self.sess = sv.prepare_or_wait_for_session(config=sess_config)
 
-        print(self.sess.run(a))
 
         if not self.is_train:
             # dirty way to bypass graph finilization error
@@ -132,6 +130,18 @@ class Trainer(object):
             g._finalized = False
 
             self.build_test_model()
+
+    def train_renderer(self):
+        for step in trange(self.start_step, self.max_step):
+            fetch_dict = {
+                "g_optim": self.g_optim,
+                "summary": self.summary_op,
+            }
+            result = self.sess.run(fetch_dict)
+
+            if step % self.log_step == 0:
+                self.summary_writer.add_summary(result['summary'], step)
+                self.summary_writer.flush()
 
     def train(self):
         z_fixed = np.random.uniform(-1, 1, size=(self.batch_size, self.z_num))
@@ -200,7 +210,7 @@ class Trainer(object):
         self.mask = tf.cast(tf.greater(self.y, 0), tf.float32)
 
         G, self.G_var = GeneratorCNN(
-                self.z, self.conv_hidden_num, self.channel,
+                self.syn_latent, self.conv_hidden_num, self.channel,
                 self.repeat_num, self.data_format, reuse=False)
 
         d_out, self.D_z, self.D_var = DiscriminatorCNN(
@@ -227,13 +237,13 @@ class Trainer(object):
 
         d_optim = d_optimizer.minimize(self.d_loss, var_list=self.D_var)
 
-        self.final_loss = self.g_loss #+ self.f_loss
-        g_optim = g_optimizer.minimize(self.final_loss, global_step=self.step, var_list=self.G_var )
+        self.final_loss = self.f_loss #+ self.f_loss
+        self.g_optim = g_optimizer.minimize(self.final_loss, global_step=self.step, var_list=self.G_var )
 
         self.balance = self.gamma * self.d_loss_real - self.g_loss
         self.measure = self.d_loss_real + tf.abs(self.balance)
 
-        with tf.control_dependencies([d_optim, g_optim]):
+        with tf.control_dependencies([d_optim, self.g_optim]):
             self.k_update = tf.assign(
                 self.k_t, tf.clip_by_value(self.k_t + self.lambda_k * self.balance, 0, 1))
 
