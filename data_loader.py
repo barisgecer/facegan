@@ -130,7 +130,7 @@ def get_syn_loader(root, batch_size, scale_size, data_format, split=None, is_gra
 
     #if dataset_name in ['celeba']:  # TODO: fix this
     queue_image = tf.image.crop_to_bounding_box(queue_image, 34, 34, 64, 64)
-    queue_image = tf.image.resize_nearest_neighbor(queue_image, [scale_size, scale_size])
+    queue_image = tf.image.resize_bilinear(queue_image, [scale_size, scale_size])
     #else:
     #    queue_image = tf.image.resize_nearest_neighbor(queue_image, [scale_size, scale_size])
 

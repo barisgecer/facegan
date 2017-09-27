@@ -199,7 +199,7 @@ class Trainer(object):
         x = norm_img(self.x)
 
         self.z = tf.random_uniform(
-            (tf.shape(x)[0], self.z_num), minval=-1.0, maxval=1.0)
+            (tf.shape(self.syn_latent)[0], self.z_num), minval=-1.0, maxval=1.0)
         self.k_t = tf.Variable(0., trainable=False, name='k_t')
 
         #self.alpha_id = tf.random_uniform((tf.shape(x)[0], 1), dtype=tf.int32, maxval=self.n_id)
@@ -210,10 +210,11 @@ class Trainer(object):
         self.mask = tf.cast(tf.greater(self.y, 0), tf.float32)
 
         F, self.F_var = GeneratorCNN(
-                self.syn_latent, self.conv_hidden_num, self.channel,
+                tf.concat([self.syn_latent,self.z],1), self.conv_hidden_num, self.channel,
                 self.repeat_num, self.data_format, reuse=False)
+        self.F = denorm_img(F, self.data_format)
 
-        G, self.G_var = AddRealismLayers(F,self.conv_hidden_num,2,self.data_format,reuse=False)
+        G, self.G_var = AddRealismLayers(F,self.conv_hidden_num,4,self.data_format,reuse=False)
 
         d_out, self.D_z, self.D_var = DiscriminatorCNN(
             tf.concat([G, x], 0), self.channel, self.z_num, self.repeat_num,
@@ -235,11 +236,12 @@ class Trainer(object):
 
         self.d_loss = self.d_loss_real - self.k_t * self.d_loss_fake
         self.g_loss = tf.reduce_mean(tf.abs(AE_G - G))
+        self.g_f_loss =  tf.reduce_mean(self.mask*tf.abs(G - norm_img(self.y )))
         self.f_loss =  tf.reduce_mean(self.mask*tf.abs(F - norm_img(self.y )))
 
         d_optim = d_optimizer.minimize(self.d_loss, var_list=self.D_var)
 
-        self.g_optim = g_optimizer.minimize(self.g_loss + self.config.reg_scale *self.f_loss, global_step=self.step, var_list=self.G_var+self.F_var )
+        self.g_optim = g_optimizer.minimize(self.g_loss + self.config.reg_scale *self.g_f_loss + self.config.ren_scale *self.f_loss, global_step=self.step, var_list=self.G_var+self.F_var )
 
         self.f_optim = f_optimizer.minimize(self.f_loss, global_step=self.step, var_list=self.F_var )
 
@@ -258,6 +260,7 @@ class Trainer(object):
         self.summary_op = tf.summary.merge([
             tf.summary.image("Real Images", self.x),
             tf.summary.image("Rendered Images", self.y),
+            tf.summary.image("F", self.F),
             tf.summary.image("Generated Images", self.G),
             #tf.summary.image("filters", kernel_transposed),
             #tf.summary.image("F", tf.slice(F_conv,[0,0,0,0],[8,61,61,1])),
@@ -267,7 +270,6 @@ class Trainer(object):
             tf.summary.scalar("loss/d_loss", self.d_loss),
             tf.summary.scalar("loss/f_loss", self.f_loss),
             tf.summary.scalar("loss/g_loss", self.g_loss),
-            tf.summary.scalar("loss/final_loss", self.final_loss),
             tf.summary.scalar("loss/d_loss_real", self.d_loss_real),
             tf.summary.scalar("loss/d_loss_fake", self.d_loss_fake),
             tf.summary.scalar("loss/g_loss", self.g_loss),
