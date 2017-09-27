@@ -45,7 +45,7 @@ def get_loader(root, batch_size, scale_size, data_format, split=None, is_graysca
 
     #if dataset_name in ['celeba']: #TODO: fix this
     queue = tf.image.crop_to_bounding_box(queue, 100, 50, 78, 78)
-    queue = tf.image.resize_nearest_neighbor(queue, [scale_size, scale_size])
+    queue = tf.image.resize_bilinear(queue, [scale_size, scale_size])
     #else:
     #    queue = tf.image.resize_nearest_neighbor(queue, [scale_size, scale_size])
 

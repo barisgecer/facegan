@@ -132,7 +132,7 @@ class Trainer(object):
             self.build_test_model()
 
     def train_renderer(self):
-        for step in trange(self.start_step, self.max_step/10):
+        for step in trange(self.start_step, int(self.max_step/10000)):
             fetch_dict = {
                 "f_optim": self.f_optim,
                 "summary": self.summary_op,

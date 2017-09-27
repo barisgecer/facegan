@@ -22,12 +22,13 @@ def get_branch_name():
         branchname = Repository('.').head.shorthand
         with open("branchname.txt", "w") as file:
             file.write(branchname)
+    return str(branchname.decode("utf-8"))
 
 # Network
 net_arg = add_argument_group('Network')
 net_arg.add_argument('--input_scale_size', type=int, default=64,#64
                      help='input image will be resized with the given value as width and height')
-net_arg.add_argument('--conv_hidden_num', type=int, default=32,
+net_arg.add_argument('--conv_hidden_num', type=int, default=64,
                      choices=[64, 128],help='n in the paper')
 net_arg.add_argument('--z_num', type=int, default=64, choices=[64, 128])
 
@@ -35,7 +36,7 @@ net_arg.add_argument('--z_num', type=int, default=64, choices=[64, 128])
 data_arg = add_argument_group('Data')
 data_arg.add_argument('--dataset', type=str, default='celeba')
 data_arg.add_argument('--split', type=str, default='train')
-data_arg.add_argument('--batch_size', type=int, default=64)
+data_arg.add_argument('--batch_size', type=int, default=32)
 data_arg.add_argument('--grayscale', type=str2bool, default=False)
 data_arg.add_argument('--num_worker', type=int, default=4)
 
