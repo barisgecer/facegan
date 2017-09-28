@@ -7,10 +7,6 @@ import pickle
 import os.path
 
 def get_loader(root, batch_size, scale_size, data_format, split=None, is_grayscale=False, seed=None):
-    dataset_name = os.path.basename(root)
-    if dataset_name in ['CelebA'] and split: #TODO: fix this
-        root = os.path.join(root, 'splits', split)
-
     for ext in ["jpg", "png"]:
         paths = glob("{}/*.{}".format(root, ext))
 
@@ -43,11 +39,8 @@ def get_loader(root, batch_size, scale_size, data_format, split=None, is_graysca
         num_threads=4, capacity=capacity,
         min_after_dequeue=min_after_dequeue, name='synthetic_inputs')
 
-    #if dataset_name in ['celeba']: #TODO: fix this
     queue = tf.image.crop_to_bounding_box(queue, 100, 50, 78, 78)
     queue = tf.image.resize_bilinear(queue, [scale_size, scale_size])
-    #else:
-    #    queue = tf.image.resize_nearest_neighbor(queue, [scale_size, scale_size])
 
     if data_format == 'NCHW':
         queue = tf.transpose(queue, [0, 3, 1, 2])
@@ -128,11 +121,8 @@ def get_syn_loader(root, batch_size, scale_size, data_format, split=None, is_gra
         num_threads=4, capacity=capacity,
         min_after_dequeue=min_after_dequeue, name='synthetic_inputs')
 
-    #if dataset_name in ['celeba']:  # TODO: fix this
     queue_image = tf.image.crop_to_bounding_box(queue_image, 34, 34, 64, 64)
     queue_image = tf.image.resize_bilinear(queue_image, [scale_size, scale_size])
-    #else:
-    #    queue_image = tf.image.resize_nearest_neighbor(queue_image, [scale_size, scale_size])
 
     if data_format == 'NCHW':
         queue_image = tf.transpose(queue_image, [0, 3, 1, 2])

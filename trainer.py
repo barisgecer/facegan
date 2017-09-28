@@ -41,7 +41,7 @@ def norm_img(image, data_format=None):
     return image
 
 
-def denorm_img(norm, data_format):
+def denorm_img(norm, data_format ='NHWC'):
     return tf.clip_by_value(to_nhwc((norm + 1) * 127.5, data_format), 0, 255)
 
 
@@ -132,9 +132,9 @@ class Trainer(object):
             self.build_test_model()
 
     def train_renderer(self):
-        for step in trange(self.start_step, int(self.max_step/10000)):
+        for step in trange(self.start_step, int(self.max_step/10)):
             fetch_dict = {
-                "f_optim": self.f_optim,
+                "ren_reg_optim": self.ren_reg_optim,
                 "summary": self.summary_op,
             }
             result = self.sess.run(fetch_dict)
@@ -194,56 +194,92 @@ class Trainer(object):
                 # if cur_measure > prev_measure * 0.99:
                 # prev_measure = cur_measure
 
+    # TODO: Refiner Netork
     def build_model(self):
-        self.x = self.data_loader
-        x = norm_img(self.x)
+        def G(input):
+            reuse = False
+            if hasattr(self, 'G_var'):
+                reuse = True
+            output, self.G_var = GeneratorCNN(input, self.conv_hidden_num, self.channel,
+                self.repeat_num, self.data_format, reuse=reuse)
+            return output
 
-        self.z = tf.random_uniform(
-            (tf.shape(self.syn_latent)[0], self.z_num), minval=-1.0, maxval=1.0)
+        def G_inv(input):
+            reuse = False
+            if hasattr(self, 'G_inv_var'):
+                reuse = True
+            output, self.G_inv_var = RegressionCNN(input, self.conv_hidden_num, self.syn_latent.get_shape()[1].value + self.z_num ,
+                self.repeat_num, self.data_format, reuse=reuse)
+            return output
+
+        def R(input):
+            reuse = False
+            if hasattr(self, 'R_var'):
+                reuse = True
+            output, self.R_var = AddRealismLayers(input,self.conv_hidden_num,4,self.data_format,reuse=reuse)
+            return output
+
+        def R_inv(input):
+            reuse = False
+            if hasattr(self, 'R_inv_var'):
+                reuse = True
+            output, self.R_inv_var = AddRealismLayers(input,self.conv_hidden_num,4,self.data_format,reuse=reuse,inv=True)
+            return output
+
+        # Define Variables
+        self.u = self.data_loader # unlabeled real examples
+        u_norm = norm_img(self.u)
+        c = self.syn_label # identity label
+        self.z = tf.random_uniform((tf.shape(self.syn_latent)[0], self.z_num), minval=-1.0, maxval=1.0) #noise vector
+        p = tf.concat([self.syn_latent,self.z],1)# 3DMM parameters
+        #c_onehot = tf.squeeze(tf.one_hot(c, depth=self.n_id, on_value=1.0, off_value=0.0),1)
+
         self.k_t = tf.Variable(0., trainable=False, name='k_t')
 
-        #self.alpha_id = tf.random_uniform((tf.shape(x)[0], 1), dtype=tf.int32, maxval=self.n_id)
-        #alpha_id_onehot = tf.squeeze(tf.one_hot(self.alpha_id, depth=self.n_id, on_value=1.0, off_value=0.0),1)
-        self.alpha_id = self.syn_label
+        self.s = self.syn_image
+        mask = tf.cast(tf.greater(self.s, 0), tf.float32)
+        s_norm = norm_img(self.s)
 
-        self.y = self.syn_image
-        self.mask = tf.cast(tf.greater(self.y, 0), tf.float32)
 
-        F, self.F_var = GeneratorCNN(
-                tf.concat([self.syn_latent,self.z],1), self.conv_hidden_num, self.channel,
-                self.repeat_num, self.data_format, reuse=False)
-        self.F = denorm_img(F, self.data_format)
+        # Build Graph
+        y = G(p)
+        x = R(y)
+        y_ = R_inv(x)
+        p_ = G_inv(y_)
+        self.x = denorm_img(x)
 
-        G, self.G_var = AddRealismLayers(F,self.conv_hidden_num,4,self.data_format,reuse=False)
-
+        # TODO: Patch-basaed Discriminator
+        # TODO: History of generated images
         d_out, self.D_z, self.D_var = DiscriminatorCNN(
-            tf.concat([G, x], 0), self.channel, self.z_num, self.repeat_num,
+            tf.concat([x, u_norm], 0), self.channel, self.z_num, self.repeat_num,
             self.conv_hidden_num, self.data_format)
-        AE_G, AE_x = tf.split(d_out, 2)
+        AE_x, AE_u = tf.split(d_out, 2)
+        self.AE_x, self.AE_u = denorm_img(AE_x), denorm_img(AE_u)
 
-        self.G = denorm_img(G, self.data_format)
-        self.AE_G, self.AE_x = denorm_img(AE_G, self.data_format), denorm_img(AE_x, self.data_format)
-
-        if self.optimizer == 'adam':
-            optimizer = tf.train.AdamOptimizer
-        else:
-            raise Exception("[!] Caution! Paper didn't use {} opimizer other than Adam".format(self.config.optimizer))
-
-        g_optimizer,f_optimizer, d_optimizer = optimizer(self.g_lr),optimizer(self.g_lr), optimizer(self.d_lr)
-
-        self.d_loss_real = tf.reduce_mean(tf.abs(AE_x - x))
-        self.d_loss_fake = tf.reduce_mean(tf.abs(AE_G - G))
-
+        # Loss functions
+        forward_cycle_loss = tf.reduce_mean(tf.abs( p - p_ ))
+        backward_cycle_loss = tf.reduce_mean(tf.abs( x - R(G(p_)) ))
+        cycle_loss = forward_cycle_loss + backward_cycle_loss
+        render_loss = tf.reduce_mean(mask * (tf.abs(y - s_norm) + tf.abs(y_ - s_norm)))
+        ren_reg_loss = tf.reduce_mean(mask * (tf.abs(y - s_norm))) + tf.reduce_mean(tf.abs(p - G_inv(s_norm)))
+            # Adversarial Training
+        self.d_loss_real = tf.reduce_mean(tf.abs(AE_u - u_norm))
+        self.d_loss_fake = tf.reduce_mean(tf.abs(AE_x - x))
         self.d_loss = self.d_loss_real - self.k_t * self.d_loss_fake
-        self.g_loss = tf.reduce_mean(tf.abs(AE_G - G))
-        self.g_f_loss =  tf.reduce_mean(self.mask*tf.abs(G - norm_img(self.y )))
-        self.f_loss =  tf.reduce_mean(self.mask*tf.abs(F - norm_img(self.y )))
+        self.g_loss = tf.reduce_mean(tf.abs(AE_x - x))
+
+        # Optimization
+        optimizer = tf.train.AdamOptimizer
+        g_optimizer, ren_reg_optimizer, d_optimizer = optimizer(self.g_lr),optimizer(self.g_lr), optimizer(self.d_lr)
+
+        self.ren_reg_optim = ren_reg_optimizer.minimize(ren_reg_loss, global_step=self.step,
+                                                        var_list=self.G_var + self.G_inv_var )
+
+        self.g_optim = g_optimizer.minimize(self.g_loss + self.config.lambda_cycle *cycle_loss +
+                                            self.config.lambda_ren *render_loss, global_step=self.step,
+                                            var_list=self.G_var + self.G_inv_var + self.R_var + self.R_inv_var )
 
         d_optim = d_optimizer.minimize(self.d_loss, var_list=self.D_var)
-
-        self.g_optim = g_optimizer.minimize(self.g_loss + self.config.reg_scale *self.g_f_loss + self.config.ren_scale *self.f_loss, global_step=self.step, var_list=self.G_var+self.F_var )
-
-        self.f_optim = f_optimizer.minimize(self.f_loss, global_step=self.step, var_list=self.F_var )
 
         self.balance = self.gamma * self.d_loss_real - self.g_loss
         self.measure = self.d_loss_real + tf.abs(self.balance)
@@ -258,21 +294,23 @@ class Trainer(object):
         #kernel_0_to_1 = (kernel - x_min) / (x_max - x_min)
         #kernel_transposed = tf.transpose(kernel_0_to_1, [3, 0, 1, 2])
         self.summary_op = tf.summary.merge([
-            tf.summary.image("Real Images", self.x),
-            tf.summary.image("Rendered Images", self.y),
-            tf.summary.image("F", self.F),
-            tf.summary.image("Generated Images", self.G),
+            tf.summary.image("Real Images", self.u),
+            tf.summary.image("Rendered Images", self.s),
+            tf.summary.image("Y", y),
+            tf.summary.image("Y_", y_),
+            tf.summary.image("Generated Images", self.x),
             #tf.summary.image("filters", kernel_transposed),
             #tf.summary.image("F", tf.slice(F_conv,[0,0,0,0],[8,61,61,1])),
-            tf.summary.image("AE_G", self.AE_G),
             tf.summary.image("AE_x", self.AE_x),
+            tf.summary.image("AE_u", self.AE_u),
 
             tf.summary.scalar("loss/d_loss", self.d_loss),
-            tf.summary.scalar("loss/f_loss", self.f_loss),
             tf.summary.scalar("loss/g_loss", self.g_loss),
+            tf.summary.scalar("loss/cycle_loss", cycle_loss),
+            tf.summary.scalar("loss/render_loss", render_loss),
+            tf.summary.scalar("loss/ren_reg_loss", ren_reg_loss),
             tf.summary.scalar("loss/d_loss_real", self.d_loss_real),
             tf.summary.scalar("loss/d_loss_fake", self.d_loss_fake),
-            tf.summary.scalar("loss/g_loss", self.g_loss),
             tf.summary.scalar("misc/measure", self.measure),
             tf.summary.scalar("misc/k_t", self.k_t),
             tf.summary.scalar("misc/d_lr", self.d_lr),
@@ -292,14 +330,14 @@ class Trainer(object):
             self.z_r, self.conv_hidden_num, self.channel, self.repeat_num, self.data_format, reuse=True)
 
         with tf.variable_scope("test") as vs:
-            self.z_r_loss = tf.reduce_mean(tf.abs(self.x - G_z_r))
+            self.z_r_loss = tf.reduce_mean(tf.abs(self.u - G_z_r))
             self.z_r_optim = z_optimizer.minimize(self.z_r_loss, var_list=[self.z_r])
 
         test_variables = tf.contrib.framework.get_variables(vs)
         self.sess.run(tf.variables_initializer(test_variables))
 
     def generate(self, inputs, alpha_id_fix, root_path=None, path=None, idx=None, save=True):
-        x = self.sess.run(self.G, {self.y: inputs})
+        x = self.sess.run(self.x, {self.s: inputs})
         if path is None and save:
             path = os.path.join(root_path, '{}_G.png'.format(idx))
             save_image(x, path)
@@ -318,17 +356,17 @@ class Trainer(object):
             #    img = img.transpose([0, 3, 1, 2])
 
             x_path = os.path.join(path, '{}_D_{}.png'.format(idx, key))
-            x = self.sess.run(self.AE_x, {self.x: img})
+            x = self.sess.run(self.AE_u, {self.u: img})
             save_image(x, x_path)
             print("[*] Samples saved: {}".format(x_path))
 
     def encode(self, inputs):
         if inputs.shape[3] in [1, 3]:
             inputs = inputs.transpose([0, 3, 1, 2])
-        return self.sess.run(self.D_z, {self.x: inputs})
+        return self.sess.run(self.D_z, {self.u: inputs})
 
     def decode(self, z):
-        return self.sess.run(self.AE_x, {self.D_z: z})
+        return self.sess.run(self.AE_u, {self.D_z: z})
 
     def interpolate_G(self, real_batch, step=0, root_path='.', train_epoch=0):
         batch_size = len(real_batch)
@@ -337,7 +375,7 @@ class Trainer(object):
         self.sess.run(self.z_r_update)
         tf_real_batch = to_nchw_numpy(real_batch)
         for i in trange(train_epoch):
-            z_r_loss, _ = self.sess.run([self.z_r_loss, self.z_r_optim], {self.x: tf_real_batch})
+            z_r_loss, _ = self.sess.run([self.z_r_loss, self.z_r_optim], {self.u: tf_real_batch})
         z = self.sess.run(self.z_r)
 
         z1, z2 = z[:half_batch_size], z[half_batch_size:]

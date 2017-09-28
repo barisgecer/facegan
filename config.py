@@ -15,7 +15,7 @@ def add_argument_group(name):
     return arg
 
 def get_branch_name():
-    if os.path.isfile("branchname.txt"):
+    if (os.name!='nt') & (os.path.isfile("branchname.txt")):
         with open("branchname.txt", "rb") as file:
             branchname = file.readline()
     else:
@@ -56,8 +56,8 @@ train_arg.add_argument('--beta2', type=float, default=0.999)
 train_arg.add_argument('--gamma', type=float, default=0.8)
 train_arg.add_argument('--lambda_k', type=float, default=0.001)
 train_arg.add_argument('--use_gpu', type=str2bool, default=True)
-train_arg.add_argument('--reg_scale', type=float, default=0.5, help='')
-train_arg.add_argument('--ren_scale', type=float, default=3, help='')
+train_arg.add_argument('--lambda_ren', type=float, default=0.5, help='')
+train_arg.add_argument('--lambda_cycle', type=float, default=1, help='')
 
 # Misc
 misc_arg = add_argument_group('Misc')
@@ -162,9 +162,5 @@ parser.add_argument('--lfw_nrof_folds', type=int,
 
 def get_config():
     config, unparsed = parser.parse_known_args()
-    if config.use_gpu:
-        data_format = 'NHWC' #'NCHW'
-    else:
-        data_format = 'NHWC'
-    setattr(config, 'data_format', data_format)
+    setattr(config, 'data_format', 'NHWC')
     return config, unparsed

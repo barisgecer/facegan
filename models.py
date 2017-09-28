@@ -14,14 +14,35 @@ def GeneratorCNN(z, hidden_num, output_num, repeat_num, data_format, reuse):
             if idx < repeat_num - 1:
                 x = upscale(x, 2, data_format)
 
-        out = slim.conv2d(x, 3, 3, 1, activation_fn=None, data_format=data_format)
+        out = slim.conv2d(x, output_num, 3, 1, activation_fn=None, data_format=data_format)
 
     variables = tf.contrib.framework.get_variables(vs)
     return out, variables
 
 
-def AddRealismLayers(x, hidden_num, repeat_num, data_format, reuse):
-    with tf.variable_scope("G_R", reuse=reuse) as vs:
+def RegressionCNN(z, hidden_num, output_num, repeat_num, data_format, reuse):
+    with tf.variable_scope("G_", reuse=reuse) as vs:
+
+        x = slim.conv2d(z, hidden_num, 3, 1, activation_fn=None, data_format=data_format)
+
+        for idx in range(repeat_num):
+            if idx > 0 :
+                x = upscale(x, 0.5, data_format)
+            x = slim.conv2d(x, hidden_num, 3, 1, activation_fn=tf.nn.elu, data_format=data_format)
+            x = slim.conv2d(x, hidden_num, 3, 1, activation_fn=tf.nn.elu, data_format=data_format)
+
+        x = tf.reshape(x,[-1,np.prod(x.get_shape().as_list()[1:])])
+        out = slim.fully_connected(x, output_num, activation_fn=None)
+
+    variables = tf.contrib.framework.get_variables(vs)
+    return out, variables
+
+
+def AddRealismLayers(x, hidden_num, repeat_num, data_format, reuse, inv=False):
+    scope = "R"
+    if inv:
+        scope = scope + "_inv"
+    with tf.variable_scope(scope, reuse=reuse) as vs:
         for idx in range(repeat_num-1):
             x = slim.conv2d(x, hidden_num, 3, 1, activation_fn=tf.nn.elu, data_format=data_format)
         out = slim.conv2d(x, 3, 3, 1, activation_fn=None, data_format=data_format)
@@ -216,4 +237,4 @@ def resize_nearest_neighbor(x, new_size, data_format):
 
 def upscale(x, scale, data_format):
     _, h, w, _ = get_conv_shape(x, data_format)
-    return resize_nearest_neighbor(x, (h*scale, w*scale), data_format)
+    return resize_nearest_neighbor(x, (int(h*scale), int(w*scale)), data_format)
