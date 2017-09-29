@@ -56,8 +56,8 @@ train_arg.add_argument('--beta2', type=float, default=0.999)
 train_arg.add_argument('--gamma', type=float, default=0.8)
 train_arg.add_argument('--lambda_k', type=float, default=0.001)
 train_arg.add_argument('--use_gpu', type=str2bool, default=True)
-train_arg.add_argument('--lambda_ren', type=float, default=0.5, help='')
-train_arg.add_argument('--lambda_cycle', type=float, default=1, help='')
+train_arg.add_argument('--lambda_ren', type=float, default=0.2, help='')
+train_arg.add_argument('--lambda_cycle', type=float, default=0.5, help='')
 
 # Misc
 misc_arg = add_argument_group('Misc')

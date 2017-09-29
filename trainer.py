@@ -267,6 +267,7 @@ class Trainer(object):
         self.d_loss_fake = tf.reduce_mean(tf.abs(AE_x - x))
         self.d_loss = self.d_loss_real - self.k_t * self.d_loss_fake
         self.g_loss = tf.reduce_mean(tf.abs(AE_x - x))
+        g_reg_loss = tf.reduce_mean(mask * (tf.abs(x - s_norm)))
 
         # Optimization
         optimizer = tf.train.AdamOptimizer
@@ -275,7 +276,7 @@ class Trainer(object):
         self.ren_reg_optim = ren_reg_optimizer.minimize(ren_reg_loss, global_step=self.step,
                                                         var_list=self.G_var + self.G_inv_var )
 
-        self.g_optim = g_optimizer.minimize(self.g_loss + self.config.lambda_cycle *cycle_loss +
+        self.g_optim = g_optimizer.minimize(self.g_loss + 0.2 * g_reg_loss + self.config.lambda_cycle *cycle_loss +
                                             self.config.lambda_ren *render_loss, global_step=self.step,
                                             var_list=self.G_var + self.G_inv_var + self.R_var + self.R_inv_var )
 
