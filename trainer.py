@@ -111,10 +111,15 @@ class Trainer(object):
         self.lr_update_step = config.lr_update_step
 
         self.is_train = config.is_train
-        self.build_model()
+        pretrained_var = self.build_model()
 
         self.saver = tf.train.Saver()
         self.summary_writer = tf.summary.FileWriter(self.model_dir)
+
+        pre_train_saver = tf.train.Saver(pretrained_var)
+        def load_pretrain(sess):
+            pre_train_saver.restore(sess, self.config.pretrained_facenet_model)
+
         sv = tf.train.Supervisor(logdir=self.model_dir,
                                  is_chief=True,
                                  saver=self.saver,
@@ -122,14 +127,14 @@ class Trainer(object):
                                  summary_writer=self.summary_writer,
                                  save_model_secs=300,
                                  global_step=self.step,
-                                 ready_for_local_init_op=None)
+                                 ready_for_local_init_op=None,
+                                 init_fn=load_pretrain)
 
         gpu_options = tf.GPUOptions(allow_growth=True)
         sess_config = tf.ConfigProto(allow_soft_placement=True,
                                      gpu_options=gpu_options)
 
         self.sess = sv.prepare_or_wait_for_session(config=sess_config)
-
 
         if not self.is_train:
             # dirty way to bypass graph finilization error
@@ -265,6 +270,13 @@ class Trainer(object):
         AE_x, AE_u = tf.split(d_out, 2)
         self.AE_x, self.AE_u = denorm_img(AE_x), denorm_img(AE_u)
 
+        C_input = tf.image.resize_bilinear(self.x, [160, 160])
+        C_input = tf.map_fn(lambda frame: tf.image.per_image_standardization(frame), C_input)
+        C = ModuleC(self.config)
+        self.c_loss, self.C_var, self.C_logits_var = \
+            C.getNetwork(image=C_input,label_batch=self.syn_label,nrof_classes=self.n_id)
+
+
         # Loss functions
         forward_cycle_loss = tf.reduce_mean(tf.abs( s_norm - y_))#p - p_ ))
         backward_cycle_loss = tf.reduce_mean(tf.abs( x - R(y_))) #R(G(p_)) ))
@@ -286,9 +298,9 @@ class Trainer(object):
         #self.ren_reg_optim = ren_reg_optimizer.minimize(ren_reg_loss, global_step=self.step,
                                                         #var_list=self.G_var + self.G_inv_var )
 
-        self.g_optim = g_optimizer.minimize(self.g_loss +  0.5* g_reg_loss + self.config.lambda_cycle *cycle_loss # + self.config.lambda_ren *render_loss
+        self.g_optim = g_optimizer.minimize(self.g_loss +  0.5* g_reg_loss + 0.05*self.c_loss+ self.config.lambda_cycle *cycle_loss # + self.config.lambda_ren *render_loss
                                             , global_step=self.step,
-                                            var_list=self.R_var + self.R_inv_var )
+                                            var_list=self.R_var + self.R_inv_var + self.C_logits_var )
 
         d_optim = d_optimizer.minimize(self.d_loss, var_list=self.D_var)
 
@@ -330,6 +342,8 @@ class Trainer(object):
             tf.summary.scalar("misc/g_lr", self.g_lr),
             tf.summary.scalar("misc/balance", self.balance),
         ])
+
+        return self.C_var
 
     def build_test_model(self):
         a=2
