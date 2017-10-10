@@ -167,6 +167,21 @@ def create_generator(z, hidden_num, output_num, repeat_num, data_format, reuse,s
     return layers[-1], variables
 
 
+def D_features(x, repeat_num, hidden_num, data_format):
+    with tf.variable_scope("D", reuse=True) as vs:
+        # Encoder
+        x = slim.conv2d(x, hidden_num, 3, 1, activation_fn=tf.nn.elu, data_format=data_format)
+
+        prev_channel_num = hidden_num
+        for idx in range(repeat_num):
+            channel_num = hidden_num * (idx + 1)
+            x = slim.conv2d(x, channel_num, 3, 1, activation_fn=tf.nn.elu, data_format=data_format)
+            x = slim.conv2d(x, channel_num, 3, 1, activation_fn=tf.nn.elu, data_format=data_format)
+            if idx < repeat_num - 1:
+                x = slim.conv2d(x, channel_num, 3, 2, activation_fn=tf.nn.elu, data_format=data_format)
+                # x = tf.contrib.layers.max_pool2d(x, [2, 2], [2, 2], padding='VALID')
+
+    return x
 
 def DiscriminatorCNN(x, input_channel, z_num, repeat_num, hidden_num, data_format):
     with tf.variable_scope("D") as vs:

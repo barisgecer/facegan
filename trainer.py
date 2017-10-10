@@ -12,6 +12,9 @@ from collections import deque
 from models import *
 from modules import ModuleC
 from utils import save_image
+from cycleGen import Generator
+from operator import itemgetter
+import cv2
 
 #denemes
 def next(loader):
@@ -55,13 +58,17 @@ def slerp(val, low, high):
 
 
 class Trainer(object):
-    def __init__(self, config, data_loader, syn_image, syn_label, syn_latent):
+    def __init__(self, config, data_loader, syn_image, syn_label, syn_latent,image_3dmm, annot_3dmm):
         self.config = config
         self.data_loader = data_loader
         self.syn_image = syn_image
         self.syn_label = syn_label
         self.syn_latent = syn_latent
+        self.image_3dmm = image_3dmm
+        self.annot_3dmm = annot_3dmm
         self.dataset = config.dataset
+        self.n_id_exam_id = config.num_log_id
+        self.n_im_per_id = config.num_log_samples
 
         self.beta1 = config.beta1
         self.beta2 = config.beta2
@@ -144,14 +151,14 @@ class Trainer(object):
                 self.summary_writer.flush()
 
     def train(self):
-        z_fixed = np.random.uniform(-1, 1, size=(self.batch_size, self.z_num))
-        alpha_id_fixed = np.repeat(np.random.randint(self.n_id, size=(int(np.floor(self.batch_size / 4.0)),1)) + 1, 4,0)
+        #z_fixed = np.random.uniform(-1, 1, size=(self.batch_size, self.z_num))
+        #alpha_id_fixed = np.repeat(np.random.randint(self.n_id, size=(int(np.floor(self.batch_size / 4.0)),1)) + 1, 4,0)
 
-        x_fixed = self.get_image_from_loader(self.data_loader)
-        save_image(x_fixed, '{}/x_fixed.png'.format(self.model_dir))
+        #x_fixed = self.get_image_from_loader(self.data_loader)
+        #save_image(x_fixed, '{}/x_fixed.png'.format(self.model_dir))
 
-        syn_fixed = self.get_image_from_loader(self.syn_image)
-        save_image(syn_fixed, '{}/syn_fixed.png'.format(self.model_dir))
+        syn_fixed, syn_fixed_label = self.get_fixed_images(self.n_id_exam_id, self.n_im_per_id)
+        save_image(syn_fixed, '{}/syn_fixed.png'.format(self.model_dir),nrow=self.n_im_per_id)
 
         prev_measure = 1
         measure_history = deque([0]*self.lr_update_step, self.lr_update_step)
@@ -184,8 +191,8 @@ class Trainer(object):
                 print("[{}/{}] Loss_D: {:.6f} Loss_G: {:.6f} measure: {:.4f}, k_t: {:.4f}". \
                       format(step, self.max_step, d_loss, g_loss, measure, k_t))
 
-            #if step % (self.log_step * self.save_step) == 0:
-                #x_fake = self.generate(syn_fixed, alpha_id_fixed, self.model_dir, idx=step)
+            if step % (self.log_step * self.save_step) == 0:
+                x_fake = self.generate(syn_fixed, syn_fixed_label, self.model_dir, idx=step)
                 #self.autoencode(x_fixed, self.model_dir, idx=step, x_fake=x_fake)
 
             if step % self.lr_update_step == self.lr_update_step - 1:
@@ -216,22 +223,24 @@ class Trainer(object):
             reuse = False
             if hasattr(self, 'R_var'):
                 reuse = True
-            output, self.R_var = AddRealismLayers(input,self.conv_hidden_num,4,self.data_format,reuse=reuse)
+            output, self.R_var = Generator('R', True, ngf=32, norm='instance', image_size=self.input_scale_size,reuse=reuse)(input)
+            #AddRealismLayers(input,self.conv_hidden_num,4,self.data_format,reuse=reuse)
             return output
 
         def R_inv(input):
             reuse = False
             if hasattr(self, 'R_inv_var'):
                 reuse = True
-            output, self.R_inv_var = AddRealismLayers(input,self.conv_hidden_num,4,self.data_format,reuse=reuse,inv=True)
+            output, self.R_inv_var = Generator('R_inv', True, ngf=32, norm='instance', image_size=self.input_scale_size, reuse=reuse)(input)
+            # AddRealismLayers(input,self.conv_hidden_num,4,self.data_format,reuse=reuse,inv=True)
             return output
 
         # Define Variables
         self.u = self.data_loader # unlabeled real examples
         u_norm = norm_img(self.u)
         c = self.syn_label # identity label
-        self.z = tf.random_uniform((tf.shape(self.syn_latent)[0], self.z_num), minval=-1.0, maxval=1.0) #noise vector
-        p = tf.concat([self.syn_latent,self.z],1)# 3DMM parameters
+        #self.z = tf.random_uniform((tf.shape(self.syn_latent)[0], self.z_num), minval=-1.0, maxval=1.0) #noise vector
+        #p = tf.concat([self.syn_latent,self.z],1)# 3DMM parameters
         #c_onehot = tf.squeeze(tf.one_hot(c, depth=self.n_id, on_value=1.0, off_value=0.0),1)
 
         self.k_t = tf.Variable(0., trainable=False, name='k_t')
@@ -242,10 +251,10 @@ class Trainer(object):
 
 
         # Build Graph
-        y = G(p)
-        x = R(y)
+        #y = G(p)
+        x = R(s_norm) #R(y)
         y_ = R_inv(x)
-        p_ = G_inv(y_)
+        #p_ = G_inv(y_)
         self.x = denorm_img(x)
 
         # TODO: Patch-basaed Discriminator
@@ -257,28 +266,29 @@ class Trainer(object):
         self.AE_x, self.AE_u = denorm_img(AE_x), denorm_img(AE_u)
 
         # Loss functions
-        forward_cycle_loss = tf.reduce_mean(tf.abs( p - p_ ))
-        backward_cycle_loss = tf.reduce_mean(tf.abs( x - R(G(p_)) ))
+        forward_cycle_loss = tf.reduce_mean(tf.abs( s_norm - y_))#p - p_ ))
+        backward_cycle_loss = tf.reduce_mean(tf.abs( x - R(y_))) #R(G(p_)) ))
         cycle_loss = forward_cycle_loss + backward_cycle_loss
-        render_loss = tf.reduce_mean(mask * (tf.abs(y - s_norm) + tf.abs(y_ - s_norm)))
-        ren_reg_loss = tf.reduce_mean(mask * (tf.abs(y - s_norm))) + tf.reduce_mean(tf.abs(p - G_inv(s_norm)))
+        #render_loss = tf.reduce_mean(mask * (tf.abs(y - s_norm) + tf.abs(y_ - s_norm)))
+        #ren_reg_loss = tf.reduce_mean(mask * (tf.abs(y - s_norm))) + tf.reduce_mean(tf.abs(p - G_inv(s_norm)))
             # Adversarial Training
         self.d_loss_real = tf.reduce_mean(tf.abs(AE_u - u_norm))
         self.d_loss_fake = tf.reduce_mean(tf.abs(AE_x - x))
         self.d_loss = self.d_loss_real - self.k_t * self.d_loss_fake
         self.g_loss = tf.reduce_mean(tf.abs(AE_x - x))
+
         g_reg_loss = tf.reduce_mean(mask * (tf.abs(x - s_norm)))
 
         # Optimization
         optimizer = tf.train.AdamOptimizer
         g_optimizer, ren_reg_optimizer, d_optimizer = optimizer(self.g_lr),optimizer(self.g_lr), optimizer(self.d_lr)
 
-        self.ren_reg_optim = ren_reg_optimizer.minimize(ren_reg_loss, global_step=self.step,
-                                                        var_list=self.G_var + self.G_inv_var )
+        #self.ren_reg_optim = ren_reg_optimizer.minimize(ren_reg_loss, global_step=self.step,
+                                                        #var_list=self.G_var + self.G_inv_var )
 
-        self.g_optim = g_optimizer.minimize(self.g_loss + 0.2 * g_reg_loss + self.config.lambda_cycle *cycle_loss +
-                                            self.config.lambda_ren *render_loss, global_step=self.step,
-                                            var_list=self.G_var + self.G_inv_var + self.R_var + self.R_inv_var )
+        self.g_optim = g_optimizer.minimize(self.g_loss +  0.5* g_reg_loss + self.config.lambda_cycle *cycle_loss # + self.config.lambda_ren *render_loss
+                                            , global_step=self.step,
+                                            var_list=self.R_var + self.R_inv_var )
 
         d_optim = d_optimizer.minimize(self.d_loss, var_list=self.D_var)
 
@@ -297,8 +307,10 @@ class Trainer(object):
         self.summary_op = tf.summary.merge([
             tf.summary.image("Real Images", self.u),
             tf.summary.image("Rendered Images", self.s),
-            tf.summary.image("Y", y),
-            tf.summary.image("Y_", y_),
+            tf.summary.image("3dmm Images", self.image_3dmm),
+            tf.summary.image("3dmm Annot", self.annot_3dmm),
+            #tf.summary.image("Y", y),
+            tf.summary.image("Y_", denorm_img(y_)),
             tf.summary.image("Generated Images", self.x),
             #tf.summary.image("filters", kernel_transposed),
             #tf.summary.image("F", tf.slice(F_conv,[0,0,0,0],[8,61,61,1])),
@@ -308,8 +320,8 @@ class Trainer(object):
             tf.summary.scalar("loss/d_loss", self.d_loss),
             tf.summary.scalar("loss/g_loss", self.g_loss),
             tf.summary.scalar("loss/cycle_loss", cycle_loss),
-            tf.summary.scalar("loss/render_loss", render_loss),
-            tf.summary.scalar("loss/ren_reg_loss", ren_reg_loss),
+            tf.summary.scalar("loss/g_reg_loss", g_reg_loss),
+            #tf.summary.scalar("loss/ren_reg_loss", ren_reg_loss),
             tf.summary.scalar("loss/d_loss_real", self.d_loss_real),
             tf.summary.scalar("loss/d_loss_fake", self.d_loss_fake),
             tf.summary.scalar("misc/measure", self.measure),
@@ -320,28 +332,29 @@ class Trainer(object):
         ])
 
     def build_test_model(self):
-        with tf.variable_scope("test") as vs:
-            # Extra ops for interpolation
-            z_optimizer = tf.train.AdamOptimizer(0.0001)
-
-            self.z_r = tf.get_variable("z_r", [self.batch_size, self.z_num], tf.float32)
-            self.z_r_update = tf.assign(self.z_r, self.z)
-
-        G_z_r, _ = GeneratorCNN(
-            self.z_r, self.conv_hidden_num, self.channel, self.repeat_num, self.data_format, reuse=True)
-
-        with tf.variable_scope("test") as vs:
-            self.z_r_loss = tf.reduce_mean(tf.abs(self.u - G_z_r))
-            self.z_r_optim = z_optimizer.minimize(self.z_r_loss, var_list=[self.z_r])
-
-        test_variables = tf.contrib.framework.get_variables(vs)
-        self.sess.run(tf.variables_initializer(test_variables))
+        a=2
+        # with tf.variable_scope("test") as vs:
+        #     # Extra ops for interpolation
+        #     #z_optimizer = tf.train.AdamOptimizer(0.0001)
+        #
+        #     #self.z_r = tf.get_variable("z_r", [self.batch_size, self.z_num], tf.float32)
+        #     #self.z_r_update = tf.assign(self.z_r, self.z)
+        #
+        # G_z_r, _ = GeneratorCNN(
+        #     self.z_r, self.conv_hidden_num, self.channel, self.repeat_num, self.data_format, reuse=True)
+        #
+        # with tf.variable_scope("test") as vs:
+        #     self.z_r_loss = tf.reduce_mean(tf.abs(self.u - G_z_r))
+        #     self.z_r_optim = z_optimizer.minimize(self.z_r_loss, var_list=[self.z_r])
+        #
+        # test_variables = tf.contrib.framework.get_variables(vs)
+        # self.sess.run(tf.variables_initializer(test_variables))
 
     def generate(self, inputs, alpha_id_fix, root_path=None, path=None, idx=None, save=True):
         x = self.sess.run(self.x, {self.s: inputs})
         if path is None and save:
             path = os.path.join(root_path, '{}_G.png'.format(idx))
-            save_image(x, path)
+            save_image(x, path,nrow=self.n_im_per_id)
             print("[*] Samples saved: {}".format(path))
         return x
 
@@ -412,37 +425,66 @@ class Trainer(object):
             save_image(img, os.path.join(root_path, 'test{}_interp_D_{}.png'.format(step, idx)), nrow=10 + 2)
 
     def test(self):
-        root_path = "./"  # self.model_dir
+        syn_fixed, syn_fixed_label = self.get_fixed_images(self.n_id_exam_id, self.n_im_per_id)
+        self.generate(syn_fixed, syn_fixed_label, self.model_dir, idx='test')
 
-        all_G_z = None
-        for step in range(3):
-            real1_batch = self.get_image_from_loader(self.data_loader)
-            real2_batch = self.get_image_from_loader(self.data_loader)
+        # root_path = "./"  # self.model_dir
+        #
+        # all_G_z = None
+        # for step in range(3):
+        #     real1_batch = self.get_image_from_loader(self.data_loader)
+        #     real2_batch = self.get_image_from_loader(self.data_loader)
+        #
+        #     save_image(real1_batch, os.path.join(root_path, 'test{}_real1.png'.format(step)))
+        #     save_image(real2_batch, os.path.join(root_path, 'test{}_real2.png'.format(step)))
+        #
+        #     self.autoencode(
+        #         real1_batch, self.model_dir, idx=os.path.join(root_path, "test{}_real1".format(step)))
+        #     self.autoencode(
+        #         real2_batch, self.model_dir, idx=os.path.join(root_path, "test{}_real2".format(step)))
+        #
+        #     self.interpolate_G(real1_batch, step, root_path)
+        #     # self.interpolate_D(real1_batch, real2_batch, step, root_path)
+        #
+        #     z_fixed = np.random.uniform(-1, 1, size=(self.batch_size, self.z_num))
+        #     G_z = self.generate(z_fixed, path=os.path.join(root_path, "test{}_G_z.png".format(step)))
+        #
+        #     if all_G_z is None:
+        #         all_G_z = G_z
+        #     else:
+        #         all_G_z = np.concatenate([all_G_z, G_z])
+        #     save_image(all_G_z, '{}/G_z{}.png'.format(root_path, step))
+        #
+        # save_image(all_G_z, '{}/all_G_z.png'.format(root_path), nrow=16)
 
-            save_image(real1_batch, os.path.join(root_path, 'test{}_real1.png'.format(step)))
-            save_image(real2_batch, os.path.join(root_path, 'test{}_real2.png'.format(step)))
+    def get_fixed_images( self, nId , nImage):
+        return np.array([cv2.imread(self.config.syn_data_dir + "/{:05d}/{:05d}.jpg".format(id + 1, im + 1))[..., ::-1]\
+          for id in np.arange(nId) for im in np.arange(nImage)]), [id+1 for id in np.arange(nId) for im in np.arange(nImage)]
 
-            self.autoencode(
-                real1_batch, self.model_dir, idx=os.path.join(root_path, "test{}_real1".format(step)))
-            self.autoencode(
-                real2_batch, self.model_dir, idx=os.path.join(root_path, "test{}_real2".format(step)))
 
-            self.interpolate_G(real1_batch, step, root_path)
-            # self.interpolate_D(real1_batch, real2_batch, step, root_path)
+    def get_image_from_loader(self, image_loader, label_loader, nId , nImage):
+        result = self.sess.run({'img': image_loader, 'label': label_loader})
+        x = result['img']
+        y = result['label']
+        np.random.seed(0)
+        while True:
+            result = self.sess.run({'img':image_loader,'label':label_loader})
+            x = np.append(x,result['img'],axis=0)
+            y = np.append(y,result['label'])
+            unique, counts = np.unique(y,return_counts=True)
+            #if all(np.in1d(np.arange(nId)+1, unique, assume_unique=True)):
+            #    if all(counts[0:nId] > nImage-1):
+            #        break
+            idx = np.sort(counts)[::-1]
+            if len(idx)> nId-1:
+                if idx[nId-1] > nImage-1:
+                    break
 
-            z_fixed = np.random.uniform(-1, 1, size=(self.batch_size, self.z_num))
-            G_z = self.generate(z_fixed, path=os.path.join(root_path, "test{}_G_z.png".format(step)))
+        sampleInd = []
+        for c in unique[np.argsort(counts)[::-1][:nId]]:
+            sampleInd.extend([i for i, z in enumerate(y.tolist()) if z == c][:nImage])
 
-            if all_G_z is None:
-                all_G_z = G_z
-            else:
-                all_G_z = np.concatenate([all_G_z, G_z])
-            save_image(all_G_z, '{}/G_z{}.png'.format(root_path, step))
-
-        save_image(all_G_z, '{}/all_G_z.png'.format(root_path), nrow=16)
-
-    def get_image_from_loader(self, data_loader):
-        x = data_loader.eval(session=self.sess)
+        x_ = x[sampleInd]
         if self.data_format == 'NCHW':
-            x = x.transpose([0, 2, 3, 1])
-        return x
+            x_ = x_.transpose([0, 2, 3, 1])
+        return x_, y[sampleInd]
