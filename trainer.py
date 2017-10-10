@@ -141,7 +141,7 @@ class Trainer(object):
     def train_renderer(self):
         for step in trange(self.start_step, int(self.max_step/10)):
             fetch_dict = {
-                "ren_reg_optim": self.ren_reg_optim,
+                "s_optim": self.s_optim,
                 "summary": self.summary_op,
             }
             result = self.sess.run(fetch_dict)
@@ -257,6 +257,9 @@ class Trainer(object):
         #p_ = G_inv(y_)
         self.x = denorm_img(x)
 
+        regressed_real = R_inv(norm_img(self.image_3dmm))
+        self.regressed_real = denorm_img(regressed_real)
+
         # TODO: Patch-basaed Discriminator
         # TODO: History of generated images
         d_out, self.D_z, self.D_var = DiscriminatorCNN(
@@ -276,19 +279,22 @@ class Trainer(object):
         self.d_loss_fake = tf.reduce_mean(tf.abs(AE_x - x))
         self.d_loss = self.d_loss_real - self.k_t * self.d_loss_fake
         self.g_loss = tf.reduce_mean(tf.abs(AE_x - x))
+        self.s_loss = tf.reduce_mean(tf.abs(self.annot_3dmm - regressed_real))
 
         g_reg_loss = tf.reduce_mean(mask * (tf.abs(x - s_norm)))
 
         # Optimization
         optimizer = tf.train.AdamOptimizer
-        g_optimizer, ren_reg_optimizer, d_optimizer = optimizer(self.g_lr),optimizer(self.g_lr), optimizer(self.d_lr)
+        g_optimizer, s_optimizer, d_optimizer = optimizer(self.g_lr),optimizer(self.g_lr), optimizer(self.d_lr)
 
         #self.ren_reg_optim = ren_reg_optimizer.minimize(ren_reg_loss, global_step=self.step,
                                                         #var_list=self.G_var + self.G_inv_var )
 
-        self.g_optim = g_optimizer.minimize(self.g_loss +  0.5* g_reg_loss + self.config.lambda_cycle *cycle_loss # + self.config.lambda_ren *render_loss
+        self.g_optim = g_optimizer.minimize(self.g_loss + self.config.lambda_cycle *cycle_loss # + self.config.lambda_ren *render_loss
                                             , global_step=self.step,
-                                            var_list=self.R_var + self.R_inv_var )
+                                            var_list=self.R_var )
+
+        self.s_optim = s_optimizer.minimize(self.s_loss, global_step=self.step,var_list=self.R_inv_var )
 
         d_optim = d_optimizer.minimize(self.d_loss, var_list=self.D_var)
 
@@ -309,6 +315,7 @@ class Trainer(object):
             tf.summary.image("Rendered Images", self.s),
             tf.summary.image("3dmm Images", self.image_3dmm),
             tf.summary.image("3dmm Annot", self.annot_3dmm),
+            tf.summary.image("3dmm Regressed", self.regressed_real),
             #tf.summary.image("Y", y),
             tf.summary.image("Y_", denorm_img(y_)),
             tf.summary.image("Generated Images", self.x),
@@ -318,6 +325,7 @@ class Trainer(object):
             tf.summary.image("AE_u", self.AE_u),
 
             tf.summary.scalar("loss/d_loss", self.d_loss),
+            tf.summary.scalar("loss/s_loss", self.s_loss),
             tf.summary.scalar("loss/g_loss", self.g_loss),
             tf.summary.scalar("loss/cycle_loss", cycle_loss),
             tf.summary.scalar("loss/g_reg_loss", g_reg_loss),

@@ -41,7 +41,7 @@ def main(config):
 
     if config.is_train:
         save_config(config)
-        #trainer.train_renderer()
+        trainer.train_renderer()
         trainer.train()
     else:
         if not config.load_path:
