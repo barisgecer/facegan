@@ -1,1 +1,1 @@
-cycleGAN
+cycle_C

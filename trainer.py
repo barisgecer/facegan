@@ -116,6 +116,7 @@ class Trainer(object):
         self.saver = tf.train.Saver()
         self.summary_writer = tf.summary.FileWriter(self.model_dir)
 
+        #tf.initialize_all_variables()
         pre_train_saver = tf.train.Saver(pretrained_var)
         def load_pretrain(sess):
             pre_train_saver.restore(sess, self.config.pretrained_facenet_model)
@@ -193,8 +194,8 @@ class Trainer(object):
                 d_loss = result['d_loss']
                 k_t = result['k_t']
 
-                print("[{}/{}] Loss_D: {:.6f} Loss_G: {:.6f} measure: {:.4f}, k_t: {:.4f}". \
-                      format(step, self.max_step, d_loss, g_loss, measure, k_t))
+                #print("[{}/{}] Loss_D: {:.6f} Loss_G: {:.6f} measure: {:.4f}, k_t: {:.4f}". \
+                #      format(step, self.max_step, d_loss, g_loss, measure, k_t))
 
             if step % (self.log_step * self.save_step) == 0:
                 x_fake = self.generate(syn_fixed, syn_fixed_label, self.model_dir, idx=step)
@@ -228,15 +229,15 @@ class Trainer(object):
             reuse = False
             if hasattr(self, 'R_var'):
                 reuse = True
-            output, self.R_var = Generator('R', True, ngf=32, norm='instance', image_size=self.input_scale_size,reuse=reuse)(input)
+            output, self.R_var = Generator('R_inf', True, ngf=32, norm='instance', image_size=self.input_scale_size,reuse=reuse)(input)
             #AddRealismLayers(input,self.conv_hidden_num,4,self.data_format,reuse=reuse)
             return output
 
-        def R_inv(input):
+        def R_inv(input, isTraining= True):
             reuse = False
             if hasattr(self, 'R_inv_var'):
                 reuse = True
-            output, self.R_inv_var = Generator('R_inv', True, ngf=32, norm='instance', image_size=self.input_scale_size, reuse=reuse)(input)
+            output, self.R_inv_var = Generator('R_inv', isTraining, ngf=32, norm='instance', image_size=self.input_scale_size, reuse=reuse)(input)
             # AddRealismLayers(input,self.conv_hidden_num,4,self.data_format,reuse=reuse,inv=True)
             return output
 
@@ -258,7 +259,7 @@ class Trainer(object):
         # Build Graph
         #y = G(p)
         x = R(s_norm) #R(y)
-        y_ = R_inv(x)
+        y_ = R_inv(x, False)
         #p_ = G_inv(y_)
         self.x = denorm_img(x)
 
@@ -270,7 +271,7 @@ class Trainer(object):
         AE_x, AE_u = tf.split(d_out, 2)
         self.AE_x, self.AE_u = denorm_img(AE_x), denorm_img(AE_u)
 
-        C_input = tf.image.resize_bilinear(self.x, [160, 160])
+        C_input = tf.image.resize_bilinear(x, [160, 160])
         C_input = tf.map_fn(lambda frame: tf.image.per_image_standardization(frame), C_input)
         C = ModuleC(self.config)
         self.c_loss, self.C_var, self.C_logits_var = \
@@ -298,7 +299,7 @@ class Trainer(object):
         #self.ren_reg_optim = ren_reg_optimizer.minimize(ren_reg_loss, global_step=self.step,
                                                         #var_list=self.G_var + self.G_inv_var )
 
-        self.g_optim = g_optimizer.minimize(self.g_loss +  0.5* g_reg_loss + 0.05*self.c_loss+ self.config.lambda_cycle *cycle_loss # + self.config.lambda_ren *render_loss
+        self.g_optim = g_optimizer.minimize(self.g_loss +  0.5* g_reg_loss + self.config.lambda_cycle *cycle_loss # + self.config.lambda_ren *render_loss
                                             , global_step=self.step,
                                             var_list=self.R_var + self.R_inv_var + self.C_logits_var )
 
@@ -311,11 +312,11 @@ class Trainer(object):
             self.k_update = tf.assign(
                 self.k_t, tf.clip_by_value(self.k_t + self.lambda_k * self.balance, 0, 1))
 
-        #kernel = G_conv_var[0]  #
-        #x_min = tf.reduce_min(kernel)
-        #x_max = tf.reduce_max(kernel)
-        #kernel_0_to_1 = (kernel - x_min) / (x_max - x_min)
-        #kernel_transposed = tf.transpose(kernel_0_to_1, [3, 0, 1, 2])
+        kernel = self.R_var[0]  #
+        x_min = tf.reduce_min(kernel)
+        x_max = tf.reduce_max(kernel)
+        kernel_0_to_1 = (kernel - x_min) / (x_max - x_min)
+        kernel_transposed = tf.transpose(kernel_0_to_1, [3, 0, 1, 2])
         self.summary_op = tf.summary.merge([
             tf.summary.image("Real Images", self.u),
             tf.summary.image("Rendered Images", self.s),
@@ -324,12 +325,13 @@ class Trainer(object):
             #tf.summary.image("Y", y),
             tf.summary.image("Y_", denorm_img(y_)),
             tf.summary.image("Generated Images", self.x),
-            #tf.summary.image("filters", kernel_transposed),
+            tf.summary.image("filters", kernel_transposed[0]),
             #tf.summary.image("F", tf.slice(F_conv,[0,0,0,0],[8,61,61,1])),
             tf.summary.image("AE_x", self.AE_x),
             tf.summary.image("AE_u", self.AE_u),
 
             tf.summary.scalar("loss/d_loss", self.d_loss),
+            tf.summary.scalar("loss/c_loss", self.c_loss),
             tf.summary.scalar("loss/g_loss", self.g_loss),
             tf.summary.scalar("loss/cycle_loss", cycle_loss),
             tf.summary.scalar("loss/g_reg_loss", g_reg_loss),
