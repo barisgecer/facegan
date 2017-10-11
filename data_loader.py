@@ -76,7 +76,7 @@ def get_syn_loader(root, batch_size, scale_size, data_format, split=None, is_gra
                     pickle.dump(labels, fp)
 
                 latentvars = np.zeros((len(paths), 234), dtype=np.float32)
-                for i, latentvar in enumerate([p.replace('3dmm_norm-aligned','3dmm_norm').replace(ext, 'txt') for p in paths]):
+                for i, latentvar in enumerate([p.replace(ext, 'txt') for p in paths]):
                     with open(latentvar) as file:
                         latentvars[i, :] = str.split(file.read(), "\n")[0:-1]
                 with open(root +"/latentvars.txt", "wb") as fp:

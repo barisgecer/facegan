@@ -223,15 +223,15 @@ class Trainer(object):
             reuse = False
             if hasattr(self, 'R_var'):
                 reuse = True
-            output, self.R_var = Generator('R', True, ngf=32, norm='instance', image_size=self.input_scale_size,reuse=reuse)(input)
+            output, self.R_var = Generator('R_inf', True, ngf=32, norm='instance', image_size=self.input_scale_size,reuse=reuse)(input)
             #AddRealismLayers(input,self.conv_hidden_num,4,self.data_format,reuse=reuse)
             return output
 
-        def R_inv(input):
+        def R_inv(input,ısTraining = True):
             reuse = False
             if hasattr(self, 'R_inv_var'):
                 reuse = True
-            output, self.R_inv_var = Generator('R_inv', True, ngf=32, norm='instance', image_size=self.input_scale_size, reuse=reuse)(input)
+            output, self.R_inv_var = Generator('R_inv', ısTraining, ngf=32, norm='instance', image_size=self.input_scale_size, reuse=reuse)(input)
             # AddRealismLayers(input,self.conv_hidden_num,4,self.data_format,reuse=reuse,inv=True)
             return output
 
@@ -253,7 +253,7 @@ class Trainer(object):
         # Build Graph
         #y = G(p)
         x = R(s_norm) #R(y)
-        y_ = R_inv(x)
+        y_ = R_inv(x, False)
         #p_ = G_inv(y_)
         self.x = denorm_img(x)
 
@@ -279,7 +279,7 @@ class Trainer(object):
         self.d_loss_fake = tf.reduce_mean(tf.abs(AE_x - x))
         self.d_loss = self.d_loss_real - self.k_t * self.d_loss_fake
         self.g_loss = tf.reduce_mean(tf.abs(AE_x - x))
-        self.s_loss = tf.reduce_mean(tf.abs(self.annot_3dmm - regressed_real))
+        self.s_loss = tf.reduce_mean(tf.abs(norm_img(self.annot_3dmm) - regressed_real))
 
         g_reg_loss = tf.reduce_mean(mask * (tf.abs(x - s_norm)))
 
