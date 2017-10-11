@@ -286,7 +286,7 @@ class Trainer(object):
         #self.ren_reg_optim = ren_reg_optimizer.minimize(ren_reg_loss, global_step=self.step,
                                                         #var_list=self.G_var + self.G_inv_var )
 
-        self.g_optim = g_optimizer.minimize(self.g_loss +  0.5* g_reg_loss + self.config.lambda_cycle *cycle_loss # + self.config.lambda_ren *render_loss
+        self.g_optim = g_optimizer.minimize(self.g_loss +  0.2* g_reg_loss + self.config.lambda_cycle *cycle_loss # + self.config.lambda_ren *render_loss
                                             , global_step=self.step,
                                             var_list=self.R_var + self.R_inv_var )
 
