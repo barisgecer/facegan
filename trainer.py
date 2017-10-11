@@ -299,7 +299,7 @@ class Trainer(object):
         #self.ren_reg_optim = ren_reg_optimizer.minimize(ren_reg_loss, global_step=self.step,
                                                         #var_list=self.G_var + self.G_inv_var )
 
-        self.g_optim = g_optimizer.minimize(self.g_loss +  0.5* g_reg_loss + self.config.lambda_cycle *cycle_loss # + self.config.lambda_ren *render_loss
+        self.g_optim = g_optimizer.minimize(self.g_loss +  0.5* g_reg_loss + 0.005*self.c_loss+ self.config.lambda_cycle *cycle_loss # + self.config.lambda_ren *render_loss
                                             , global_step=self.step,
                                             var_list=self.R_var + self.R_inv_var + self.C_logits_var )
 
@@ -312,11 +312,11 @@ class Trainer(object):
             self.k_update = tf.assign(
                 self.k_t, tf.clip_by_value(self.k_t + self.lambda_k * self.balance, 0, 1))
 
-        kernel = self.R_var[0]  #
-        x_min = tf.reduce_min(kernel)
-        x_max = tf.reduce_max(kernel)
-        kernel_0_to_1 = (kernel - x_min) / (x_max - x_min)
-        kernel_transposed = tf.transpose(kernel_0_to_1, [3, 0, 1, 2])
+        kernel = self.C_logits_var[0][0,0]  #
+        #x_min = tf.reduce_min(kernel)
+        #x_max = tf.reduce_max(kernel)
+        #kernel_0_to_1 = (kernel - x_min) / (x_max - x_min)
+        #kernel_transposed = tf.transpose(kernel_0_to_1, [3, 0, 1, 2])
         self.summary_op = tf.summary.merge([
             tf.summary.image("Real Images", self.u),
             tf.summary.image("Rendered Images", self.s),
@@ -325,11 +325,12 @@ class Trainer(object):
             #tf.summary.image("Y", y),
             tf.summary.image("Y_", denorm_img(y_)),
             tf.summary.image("Generated Images", self.x),
-            tf.summary.image("filters", kernel_transposed[0]),
+            #tf.summary.image("filters", kernel_transposed),
             #tf.summary.image("F", tf.slice(F_conv,[0,0,0,0],[8,61,61,1])),
             tf.summary.image("AE_x", self.AE_x),
             tf.summary.image("AE_u", self.AE_u),
 
+            tf.summary.scalar("misc/filter", kernel),
             tf.summary.scalar("loss/d_loss", self.d_loss),
             tf.summary.scalar("loss/c_loss", self.c_loss),
             tf.summary.scalar("loss/g_loss", self.g_loss),
