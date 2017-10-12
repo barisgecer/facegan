@@ -139,9 +139,9 @@ class Trainer(object):
             self.build_test_model()
 
     def train_renderer(self):
-        for step in trange(self.start_step, int(self.max_step/10)):
+        for step in trange(self.start_step, int(self.max_step)):
             fetch_dict = {
-                "ren_reg_optim": self.ren_reg_optim,
+                "ren_reg_optim": self.g_optim,
                 "summary": self.summary_op,
             }
             result = self.sess.run(fetch_dict)
@@ -245,7 +245,7 @@ class Trainer(object):
 
         self.k_t = tf.Variable(0., trainable=False, name='k_t')
 
-        self.s = self.syn_image
+        self.s = self.annot_3dmm
         mask = tf.cast(tf.greater(self.s, 0), tf.float32)
         s_norm = norm_img(self.s)
 
@@ -277,7 +277,7 @@ class Trainer(object):
         self.d_loss = self.d_loss_real - self.k_t * self.d_loss_fake
         self.g_loss = tf.reduce_mean(tf.abs(AE_x - x))
 
-        g_reg_loss = tf.reduce_mean(mask * (tf.abs(x - s_norm)))
+        g_reg_loss = tf.reduce_mean(mask * (tf.abs(x - norm_img(self.image_3dmm))))
 
         # Optimization
         optimizer = tf.train.AdamOptimizer
@@ -286,9 +286,9 @@ class Trainer(object):
         #self.ren_reg_optim = ren_reg_optimizer.minimize(ren_reg_loss, global_step=self.step,
                                                         #var_list=self.G_var + self.G_inv_var )
 
-        self.g_optim = g_optimizer.minimize(self.g_loss +  0.5* g_reg_loss + self.config.lambda_cycle *cycle_loss # + self.config.lambda_ren *render_loss
+        self.g_optim = g_optimizer.minimize(g_reg_loss# + self.config.lambda_ren *render_loss
                                             , global_step=self.step,
-                                            var_list=self.R_var + self.R_inv_var )
+                                            var_list=self.R_var)
 
         d_optim = d_optimizer.minimize(self.d_loss, var_list=self.D_var)
 

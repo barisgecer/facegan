@@ -198,4 +198,4 @@ def get_3dmm_loader(root, batch_size, scale_size, data_format, split=None, is_gr
     else:
         raise Exception("[!] Unkown data_format: {}".format(data_format))
 
-    return tf.to_float(queue_image), queue_3dmm
+    return tf.to_float(queue_image), tf.to_float(queue_3dmm)
