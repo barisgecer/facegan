@@ -139,7 +139,10 @@ class Trainer(object):
             self.build_test_model()
 
     def train_renderer(self):
-        for step in trange(self.start_step, int(self.max_step)):
+        syn_fixed, syn_fixed_label = self.get_fixed_images(self.n_id_exam_id, self.n_im_per_id)
+        save_image(syn_fixed, '{}/syn_fixed.png'.format(self.model_dir),nrow=self.n_im_per_id)
+
+        for step in trange(self.start_step, int(self.max_step*4)):
             fetch_dict = {
                 "ren_reg_optim": self.g_optim,
                 "summary": self.summary_op,
@@ -149,6 +152,10 @@ class Trainer(object):
             if step % self.log_step == 0:
                 self.summary_writer.add_summary(result['summary'], step)
                 self.summary_writer.flush()
+
+        if step % (self.log_step * self.save_step) == 0:
+            x_fake = self.generate(syn_fixed, syn_fixed_label, self.model_dir, idx=step)
+            #self.autoencode(x_fixed, self.model_dir, idx=step, x_fake=x_fake)
 
     def train(self):
         #z_fixed = np.random.uniform(-1, 1, size=(self.batch_size, self.z_num))
