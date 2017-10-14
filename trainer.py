@@ -249,6 +249,8 @@ class Trainer(object):
         mask = tf.cast(tf.greater(self.s, 0), tf.float32)
         s_norm = norm_img(self.s)
 
+        regressed_real = R_inv(norm_img(self.image_3dmm))
+        self.regressed_real = denorm_img(regressed_real)
 
         # Build Graph
         #y = G(p)
@@ -257,8 +259,6 @@ class Trainer(object):
         #p_ = G_inv(y_)
         self.x = denorm_img(x)
 
-        regressed_real = R_inv(norm_img(self.image_3dmm))
-        self.regressed_real = denorm_img(regressed_real)
 
         # TODO: Patch-basaed Discriminator
         # TODO: History of generated images
