@@ -139,7 +139,7 @@ class Trainer(object):
             self.build_test_model()
 
     def train_renderer(self):
-        for step in trange(self.start_step, int(self.max_step/2)):
+        for step in trange(self.start_step, int(self.max_step/5)):
             fetch_dict = {
                 "s_optim": self.s_optim,
                 "summary": self.summary_op,
@@ -255,7 +255,7 @@ class Trainer(object):
         # Build Graph
         #y = G(p)
         x = R(s_norm) #R(y)
-        y_ = R_inv(x, False)
+        y_ = R_inv(x)#, False)
         #p_ = G_inv(y_)
         self.x = denorm_img(x)
 
@@ -271,7 +271,7 @@ class Trainer(object):
         # Loss functions
         forward_cycle_loss = tf.reduce_mean(tf.abs( s_norm - y_))#p - p_ ))
         backward_cycle_loss = tf.reduce_mean(tf.abs( x - R(y_))) #R(G(p_)) ))
-        cycle_loss = forward_cycle_loss + backward_cycle_loss
+        cycle_loss = forward_cycle_loss# + backward_cycle_loss
         #render_loss = tf.reduce_mean(mask * (tf.abs(y - s_norm) + tf.abs(y_ - s_norm)))
         #ren_reg_loss = tf.reduce_mean(mask * (tf.abs(y - s_norm))) + tf.reduce_mean(tf.abs(p - G_inv(s_norm)))
             # Adversarial Training
