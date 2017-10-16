@@ -153,9 +153,9 @@ class Trainer(object):
                 self.summary_writer.add_summary(result['summary'], step)
                 self.summary_writer.flush()
 
-        if step % (self.log_step * self.save_step) == 0:
-            x_fake = self.generate(syn_fixed, syn_fixed_label, self.model_dir, idx=step)
-            #self.autoencode(x_fixed, self.model_dir, idx=step, x_fake=x_fake)
+            if step % (self.log_step * self.save_step) == 0:
+                x_fake = self.generate(syn_fixed, syn_fixed_label, self.model_dir, idx=step)
+                #self.autoencode(x_fixed, self.model_dir, idx=step, x_fake=x_fake)
 
     def train(self):
         #z_fixed = np.random.uniform(-1, 1, size=(self.batch_size, self.z_num))
