@@ -230,7 +230,7 @@ class Trainer(object):
             reuse = False
             if hasattr(self, 'R_var'):
                 reuse = True
-            output, self.R_var = Generator('R', True, ngf=32, norm='instance', image_size=self.input_scale_size,reuse=reuse)(input)
+            output, self.R_var = Generator('R_inf', True, ngf=32, norm='instance', image_size=self.input_scale_size,reuse=reuse)(input)
             #AddRealismLayers(input,self.conv_hidden_num,4,self.data_format,reuse=reuse)
             return output
 
