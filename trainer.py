@@ -14,7 +14,6 @@ from modules import ModuleC
 from utils import save_image
 from cycleGen import Generator
 from operator import itemgetter
-import cv2
 
 #denemes
 def next(loader):
@@ -140,11 +139,12 @@ class Trainer(object):
 
     def train_renderer(self):
         syn_fixed, syn_fixed_label = self.get_fixed_images(self.n_id_exam_id, self.n_im_per_id)
-        save_image(syn_fixed, '{}/syn_fixed.png'.format(self.model_dir),nrow=self.n_im_per_id)
+        #save_image(syn_fixed, '{}/syn_fixed.png'.format(self.model_dir),nrow=self.n_im_per_id)
 
         for step in trange(self.start_step, int(self.max_step*4)):
             fetch_dict = {
-                "ren_reg_optim": self.g_optim,
+                "g_optim": self.g_optim,
+                "s_optim": self.s_optim,
                 "summary": self.summary_op,
             }
             result = self.sess.run(fetch_dict)
@@ -253,58 +253,63 @@ class Trainer(object):
         self.k_t = tf.Variable(0., trainable=False, name='k_t')
 
         self.s = self.annot_3dmm
-        mask = tf.cast(tf.greater(self.s, 0), tf.float32)
-        s_norm = norm_img(self.s)
+        #mask = tf.cast(tf.greater(self.s, 0), tf.float32)
+        #s_norm = norm_img(self.s)
 
 
         # Build Graph
-        #y = G(p)
-        x = R(s_norm) #R(y)
-        y_ = R_inv(x)
-        #p_ = G_inv(y_)
-        self.x = denorm_img(x)
+        y = G(self.s)
+        #x = R(s_norm) #R(y)
+        #y_ = R_inv(x)
+        p_ = G_inv(norm_img(self.image_3dmm))
+        self.x = denorm_img(y)
 
         # TODO: Patch-basaed Discriminator
         # TODO: History of generated images
-        d_out, self.D_z, self.D_var = DiscriminatorCNN(
-            tf.concat([x, u_norm], 0), self.channel, self.z_num, self.repeat_num,
-            self.conv_hidden_num, self.data_format)
-        AE_x, AE_u = tf.split(d_out, 2)
-        self.AE_x, self.AE_u = denorm_img(AE_x), denorm_img(AE_u)
+        #d_out, self.D_z, self.D_var = DiscriminatorCNN(
+        #    tf.concat([x, u_norm], 0), self.channel, self.z_num, self.repeat_num,
+        #    self.conv_hidden_num, self.data_format)
+        #AE_x, AE_u = tf.split(d_out, 2)
+        #self.AE_x, self.AE_u = denorm_img(AE_x), denorm_img(AE_u)
 
         # Loss functions
-        forward_cycle_loss = tf.reduce_mean(tf.abs( s_norm - y_))#p - p_ ))
-        backward_cycle_loss = tf.reduce_mean(tf.abs( x - R(y_))) #R(G(p_)) ))
-        cycle_loss = forward_cycle_loss + backward_cycle_loss
+        #forward_cycle_loss = tf.reduce_mean(tf.abs( s_norm - y_))#p - p_ ))
+        #backward_cycle_loss = tf.reduce_mean(tf.abs( x - R(y_))) #R(G(p_)) ))
+        #cycle_loss = forward_cycle_loss + backward_cycle_loss
         #render_loss = tf.reduce_mean(mask * (tf.abs(y - s_norm) + tf.abs(y_ - s_norm)))
         #ren_reg_loss = tf.reduce_mean(mask * (tf.abs(y - s_norm))) + tf.reduce_mean(tf.abs(p - G_inv(s_norm)))
             # Adversarial Training
-        self.d_loss_real = tf.reduce_mean(tf.abs(AE_u - u_norm))
-        self.d_loss_fake = tf.reduce_mean(tf.abs(AE_x - x))
-        self.d_loss = self.d_loss_real - self.k_t * self.d_loss_fake
-        self.g_loss = tf.reduce_mean(tf.abs(AE_x - x))
+        #self.d_loss_real = tf.reduce_mean(tf.abs(AE_u - u_norm))
+        #self.d_loss_fake = tf.reduce_mean(tf.abs(AE_x - x))
+        #self.d_loss = self.d_loss_real - self.k_t * self.d_loss_fake
+        self.g_loss = tf.reduce_mean(tf.abs(y - norm_img(self.image_3dmm)))
+        self.s_loss = tf.reduce_mean(tf.square(p_ - self.annot_3dmm))
 
-        g_reg_loss = tf.reduce_mean(mask * (tf.abs(x - norm_img(self.image_3dmm))))
+        #g_reg_loss = tf.reduce_mean(mask * (tf.abs(x - norm_img(self.image_3dmm))))
 
         # Optimization
         optimizer = tf.train.AdamOptimizer
-        g_optimizer, ren_reg_optimizer, d_optimizer = optimizer(self.g_lr),optimizer(self.g_lr), optimizer(self.d_lr)
+        g_optimizer, s_optimizer, d_optimizer = optimizer(self.g_lr),optimizer(self.g_lr), optimizer(self.d_lr)
 
         #self.ren_reg_optim = ren_reg_optimizer.minimize(ren_reg_loss, global_step=self.step,
                                                         #var_list=self.G_var + self.G_inv_var )
 
-        self.g_optim = g_optimizer.minimize(g_reg_loss# + self.config.lambda_ren *render_loss
+        self.g_optim = g_optimizer.minimize(self.g_loss# + self.config.lambda_ren *render_loss
                                             , global_step=self.step,
-                                            var_list=self.R_var)
+                                            var_list=self.G_var)
 
-        d_optim = d_optimizer.minimize(self.d_loss, var_list=self.D_var)
+        self.s_optim = s_optimizer.minimize(self.s_loss# + self.config.lambda_ren *render_loss
+                                            , global_step=self.step,
+                                            var_list=self.G_inv_var)
 
-        self.balance = self.gamma * self.d_loss_real - self.g_loss
-        self.measure = self.d_loss_real + tf.abs(self.balance)
+        #d_optim = d_optimizer.minimize(self.d_loss, var_list=self.D_var)
 
-        with tf.control_dependencies([d_optim, self.g_optim]):
-            self.k_update = tf.assign(
-                self.k_t, tf.clip_by_value(self.k_t + self.lambda_k * self.balance, 0, 1))
+        #self.balance = self.gamma * self.d_loss_real - self.g_loss
+        #self.measure = self.d_loss_real + tf.abs(self.balance)
+
+        #with tf.control_dependencies([d_optim, self.g_optim]):
+        #    self.k_update = tf.assign(
+        #        self.k_t, tf.clip_by_value(self.k_t + self.lambda_k * self.balance, 0, 1))
 
         #kernel = G_conv_var[0]  #
         #x_min = tf.reduce_min(kernel)
@@ -312,30 +317,30 @@ class Trainer(object):
         #kernel_0_to_1 = (kernel - x_min) / (x_max - x_min)
         #kernel_transposed = tf.transpose(kernel_0_to_1, [3, 0, 1, 2])
         self.summary_op = tf.summary.merge([
-            tf.summary.image("Real Images", self.u),
-            tf.summary.image("Rendered Images", self.s),
+            #tf.summary.image("Real Images", self.u),
+            tf.summary.image("Rendered Images", self.x),
             tf.summary.image("3dmm Images", self.image_3dmm),
-            tf.summary.image("3dmm Annot", self.annot_3dmm),
+            #tf.summary.image("3dmm Annot", self.annot_3dmm),
             #tf.summary.image("Y", y),
-            tf.summary.image("Y_", denorm_img(y_)),
-            tf.summary.image("Generated Images", self.x),
+            #tf.summary.image("Y_", denorm_img(y_)),
+            #tf.summary.image("Generated Images", self.x),
             #tf.summary.image("filters", kernel_transposed),
             #tf.summary.image("F", tf.slice(F_conv,[0,0,0,0],[8,61,61,1])),
-            tf.summary.image("AE_x", self.AE_x),
-            tf.summary.image("AE_u", self.AE_u),
+            #tf.summary.image("AE_x", self.AE_x),
+            #tf.summary.image("AE_u", self.AE_u),
 
-            tf.summary.scalar("loss/d_loss", self.d_loss),
+            #tf.summary.scalar("loss/d_loss", self.d_loss),
             tf.summary.scalar("loss/g_loss", self.g_loss),
-            tf.summary.scalar("loss/cycle_loss", cycle_loss),
-            tf.summary.scalar("loss/g_reg_loss", g_reg_loss),
+            #tf.summary.scalar("loss/cycle_loss", cycle_loss),
+            tf.summary.scalar("loss/s_loss", self.s_loss),
             #tf.summary.scalar("loss/ren_reg_loss", ren_reg_loss),
-            tf.summary.scalar("loss/d_loss_real", self.d_loss_real),
-            tf.summary.scalar("loss/d_loss_fake", self.d_loss_fake),
-            tf.summary.scalar("misc/measure", self.measure),
-            tf.summary.scalar("misc/k_t", self.k_t),
-            tf.summary.scalar("misc/d_lr", self.d_lr),
-            tf.summary.scalar("misc/g_lr", self.g_lr),
-            tf.summary.scalar("misc/balance", self.balance),
+            #tf.summary.scalar("loss/d_loss_real", self.d_loss_real),
+            #tf.summary.scalar("loss/d_loss_fake", self.d_loss_fake),
+            #tf.summary.scalar("misc/measure", self.measure),
+            #tf.summary.scalar("misc/k_t", self.k_t),
+            #tf.summary.scalar("misc/d_lr", self.d_lr),
+            #tf.summary.scalar("misc/g_lr", self.g_lr),
+            #tf.summary.scalar("misc/balance", self.balance),
         ])
 
     def build_test_model(self):
@@ -465,8 +470,11 @@ class Trainer(object):
         # save_image(all_G_z, '{}/all_G_z.png'.format(root_path), nrow=16)
 
     def get_fixed_images( self, nId , nImage):
-        return np.array([cv2.imread(self.config.syn_data_dir + "/{:05d}/{:05d}.jpg".format(id + 1, im + 1))[..., ::-1]\
-          for id in np.arange(nId) for im in np.arange(nImage)]), [id+1 for id in np.arange(nId) for im in np.arange(nImage)]
+        def readfile(file_path):
+            with open(file_path) as file:
+                return np.array([float(i) for i in str.split(file.read(), "\n")[0:-1]])
+        return [np.concatenate((readfile(self.config.syn_data_dir + "/{:05d}/{:05d}.txt".format(id + 1, im + 1)), np.random.randn(self.z_num)))\
+          for id in np.arange(nId) for im in np.arange(nImage)], [id+1 for id in np.arange(nId) for im in np.arange(nImage)]
 
 
     def get_image_from_loader(self, image_loader, label_loader, nId , nImage):
