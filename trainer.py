@@ -206,7 +206,7 @@ class Trainer(object):
                 self.summary_writer.add_summary(result['summary'], step)
                 self.summary_writer.flush()
 
-            if step % (self.log_step * self.save_step) == 0 & self.config.pretrain_generator:
+            if (step % (self.log_step * self.save_step) == 0) & self.config.pretrain_generator:
                 x_fake = self.generate(fixed_latent, fixed_label, self.model_dir, idx=step)
                 #self.autoencode(x_fixed, self.model_dir, idx=step, x_fake=x_fake)
 
