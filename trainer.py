@@ -58,7 +58,7 @@ def slerp(val, low, high):
 
 
 class Trainer(object):
-    def __init__(self, config, real_image, syn_image, syn_label, syn_latent, image_3dmm, annot_3dmm, latent_3dmm):
+    def __init__(self, config, real_image, syn_image, syn_label, syn_latent, image_3dmm, annot_3dmm, latent_3dmm, image_3dmm_test, annot_3dmm_test, latent_3dmm_test):
         self.config = config
         self.real_image = real_image
         self.syn_image = syn_image
@@ -67,6 +67,9 @@ class Trainer(object):
         self.image_3dmm = image_3dmm
         self.annot_3dmm = annot_3dmm
         self.latent_3dmm = latent_3dmm
+        self.image_3dmm_test = image_3dmm_test
+        self.annot_3dmm_test = annot_3dmm_test
+        self.latent_3dmm_test = latent_3dmm_test
         self.dataset = config.dataset
         self.n_id_exam_id = config.num_log_id
         self.n_im_per_id = config.num_log_samples
@@ -325,7 +328,10 @@ class Trainer(object):
         ren_p_ = R(p_) #tf.split(p_, [451, 61],1)[0]
 
         # Regression
-        ren_reg = R(G_inv(norm_img(self.image_3dmm)))
+        reg_latent = G_inv(norm_img(self.image_3dmm))
+        ren_reg = R(reg_latent)
+
+        ren_reg_test = R(G_inv(norm_img(self.image_3dmm_test)))
 
         # TODO: Patch-based Discriminator
         # TODO: History of generated images
@@ -345,6 +351,7 @@ class Trainer(object):
         # Pretrain
         self.ren_loss = tf.reduce_mean(tf.abs(ren_syn - norm_img(self.syn_image)))
         self.reg_loss = tf.reduce_mean(tf.abs(ren_reg - norm_img(self.annot_3dmm)))
+        self.reg_latent_loss = tf.reduce_mean(tf.abs(reg_latent - tf.split(self.latent_3dmm, [451, 61],1)[0]))
 
         # Optimization
         optimizer = tf.train.AdamOptimizer
@@ -379,6 +386,9 @@ class Trainer(object):
             tf.summary.image("Regressor Input", self.image_3dmm),
             tf.summary.image("Regressor Output", denorm_img(ren_reg)),
             tf.summary.image("Regressor GT", self.annot_3dmm),
+            tf.summary.image("Regressor Input-Test", self.image_3dmm_test),
+            tf.summary.image("Regressor Output-Test", denorm_img(ren_reg_test)),
+            tf.summary.image("Regressor GT-Test", self.annot_3dmm_test),
             tf.summary.image("Rendering Output", denorm_img(ren_syn)),
             tf.summary.image("Rendering GT", self.syn_image),
             #tf.summary.image("filters", kernel_transposed),
