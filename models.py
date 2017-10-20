@@ -2,14 +2,14 @@ import numpy as np
 import tensorflow as tf
 slim = tf.contrib.slim
 
-def GeneratorCNN(z, hidden_num, output_num, repeat_num, data_format, reuse):
-    with tf.variable_scope("G", reuse=reuse) as vs:
+def GeneratorCNN(name, z, hidden_num, output_num, repeat_num, data_format, reuse):
+    with tf.variable_scope(name, reuse=reuse) as vs:
         num_output = int(np.prod([8, 8, hidden_num]))
         x = slim.fully_connected(z, num_output, activation_fn=None)
         x = reshape(x, 8, 8, hidden_num, data_format)
         
         for idx in range(repeat_num):
-            x = slim.conv2d(x, hidden_num, 3, 1, activation_fn=tf.nn.elu, data_format=data_format)
+            x = slim.conv2d(x, hidden_num, 3, 1, activation_fn=tf.nn.elu, data_format=data_format,)
             x = slim.conv2d(x, hidden_num, 3, 1, activation_fn=tf.nn.elu, data_format=data_format)
             if idx < repeat_num - 1:
                 x = upscale(x, 2, data_format)
@@ -20,8 +20,8 @@ def GeneratorCNN(z, hidden_num, output_num, repeat_num, data_format, reuse):
     return out, variables
 
 
-def RegressionCNN(z, hidden_num, output_num, repeat_num, data_format, reuse):
-    with tf.variable_scope("G_", reuse=reuse) as vs:
+def RegressionCNN(name, z, hidden_num, output_num, repeat_num, data_format, reuse):
+    with tf.variable_scope(name, reuse=reuse) as vs:
 
         x = slim.conv2d(z, hidden_num, 3, 1, activation_fn=None, data_format=data_format)
 

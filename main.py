@@ -7,6 +7,15 @@ from data_loader import *
 from utils import prepare_dirs_and_logger, save_config
 
 def main(config):
+    if config.train_renderer:
+        config.task = "{}_{}".format(config.task, 'ren')
+    if config.train_regressor:
+        config.task = "{}_{}".format(config.task, 'reg')
+        if config.pretrain_generator:
+            config.task = "{}_{}".format(config.task, 'pregen')
+    if config.train_generator:
+        config.task = "{}_{}".format(config.task, 'gen')
+
     prepare_dirs_and_logger(config)
 
     rng = np.random.RandomState(config.random_seed)
@@ -41,8 +50,12 @@ def main(config):
 
     if config.is_train:
         save_config(config)
-        trainer.train_renderer()
-        trainer.train()
+        if config.train_renderer:
+            trainer.train_renderer()
+        if config.train_regressor:
+            trainer.train_regressor()
+        if config.train_generator:
+            trainer.train()
     else:
         if not config.load_path:
             raise Exception("[!] You should specify `load_path` to load a pretrained model")
