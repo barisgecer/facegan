@@ -91,3 +91,7 @@ def save_image(tensor, filename, nrow=8, padding=2,
                             normalize=normalize, scale_each=scale_each)
     im = Image.fromarray(ndarr)
     im.save(filename)
+
+def save_one_image(tensor, filename):
+    im = Image.fr (tensor)
+    im.save(filename)

@@ -54,12 +54,14 @@ def main(config):
 
     if config.is_train:
         save_config(config)
-        if config.train_renderer:
+        if config.train_renderer | (config.cont == 'ren'):
             trainer.train_renderer()
-        if config.train_regressor:
+        if config.train_regressor | (config.cont == 'reg'):
             trainer.train_regressor()
-        if config.train_generator:
+        if config.train_generator | (config.cont == 'gen'):
             trainer.train()
+        if config.generate_datset:
+            trainer.generate_dataset()
     else:
         if not config.load_path:
             raise Exception("[!] You should specify `load_path` to load a pretrained model")

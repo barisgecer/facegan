@@ -15,6 +15,8 @@ from utils import save_image
 from cycleGen import Generator
 from operator import itemgetter
 import cv2
+import pickle
+import os.path
 
 #denemes
 def next(loader):
@@ -215,14 +217,14 @@ class Trainer(object):
 
     def train(self):
         self.prepare_session(self.gen_var)
-        #z_fixed = np.random.uniform(-1, 1, size=(self.batch_size, self.z_num))
-        #alpha_id_fixed = np.repeat(np.random.randint(self.n_id, size=(int(np.floor(self.batch_size / 4.0)),1)) + 1, 4,0)
+        # z_fixed = np.random.uniform(-1, 1, size=(self.batch_size, self.z_num))
+        # alpha_id_fixed = np.repeat(np.random.randint(self.n_id, size=(int(np.floor(self.batch_size / 4.0)),1)) + 1, 4,0)
 
         fixed_image, fixed_label, fixed_latent = self.get_fixed_images(self.n_id_exam_id, self.n_im_per_id)
-        save_image(fixed_image, '{}/syn_fixed.png'.format(self.model_dir),nrow=self.n_im_per_id)
+        save_image(fixed_image, '{}/syn_fixed.png'.format(self.model_dir), nrow=self.n_im_per_id)
 
         prev_measure = 1
-        measure_history = deque([0]*self.lr_update_step, self.lr_update_step)
+        measure_history = deque([0] * self.lr_update_step, self.lr_update_step)
 
         for step in trange(self.start_step, self.max_step):
             fetch_dict = {
@@ -254,13 +256,35 @@ class Trainer(object):
 
             if step % (self.log_step * self.save_step) == 0:
                 x_fake = self.generate(fixed_latent, fixed_label, self.model_dir, idx=step)
-                #self.autoencode(x_fixed, self.model_dir, idx=step, x_fake=x_fake)
+                # self.autoencode(x_fixed, self.model_dir, idx=step, x_fake=x_fake)
 
             if step % self.lr_update_step == self.lr_update_step - 1:
                 self.sess.run([self.g_lr_update, self.d_lr_update])
                 # cur_measure = np.mean(measure_history)
                 # if cur_measure > prev_measure * 0.99:
                 # prev_measure = cur_measure
+
+    def generate_dataset(self):
+        with open(self.config.syn_data_dir +"/list.txt", "rb") as fp:
+            paths = pickle.load(fp)
+        with open(self.config.syn_data_dir +"/labels.txt", "rb") as fp:
+            labels = pickle.load(fp)
+        with open(self.config.syn_data_dir + "/latentvars.txt", "rb") as fp:
+            latentvars = pickle.load(fp)
+        #
+        # np.random.randn(self.z_num))
+        # self.prepare_session(None)
+        # batch_size = 10
+        # for i in range(1,len(paths),batch_size):
+        #     latentvars(i:min(i+batch_size-1,len(paths)))
+        #     i min(i + batch_size - 1, len(paths))
+        #     x = self.sess.run(self.x, {self.p: inputs})
+        #     for 1 10
+        #         path = os.path.join(root_path, '{}_G.png'.format(idx))
+        #         save_image(x, path,nrow=self.n_im_per_id)
+        #
+        #         im = Image.fromarray(ndarr)
+        #         im.save(filename
 
     # TODO: Refiner Netork
     def build_model(self):
@@ -347,10 +371,12 @@ class Trainer(object):
         self.d_loss_fake = tf.reduce_mean(tf.abs(AE_x - x))
         self.d_loss = self.d_loss_real - self.k_t * self.d_loss_fake
         self.g_loss = tf.reduce_mean(tf.abs(AE_x - x))
+        self.p_loss = tf.reduce_mean(tf.nn.l2_loss(self.syn_latent - p_))
         self.s_loss = tf.reduce_mean(tf.abs(ren_p - ren_p_))
         # Pretrain
         self.ren_loss = tf.reduce_mean(tf.abs(ren_syn - norm_img(self.syn_image)))
         self.reg_loss = tf.reduce_mean(tf.abs(ren_reg - norm_img(self.annot_3dmm)))
+        self.reg_test_loss = tf.reduce_mean(tf.abs(ren_reg_test - norm_img(self.annot_3dmm_test)))
         self.reg_latent_loss = tf.reduce_mean(tf.abs(reg_latent - tf.split(self.latent_3dmm, [451, 61],1)[0]))
 
         # Optimization
@@ -361,7 +387,7 @@ class Trainer(object):
 
         self.reg_optim = g_optimizer.minimize(self.reg_loss, global_step=self.step,var_list=self.G_inv_var )
 
-        g_optim = g_optimizer.minimize(self.g_loss + self.config.lambda_s *self.s_loss, global_step=self.step, var_list=self.G_var )
+        g_optim = g_optimizer.minimize(self.g_loss + self.config.lambda_s *self.p_loss, global_step=self.step, var_list=self.G_var )
 
         d_optim = d_optimizer.minimize(self.d_loss, var_list=self.D_var)
 
@@ -371,6 +397,7 @@ class Trainer(object):
         with tf.control_dependencies([d_optim, g_optim]):
             self.k_update = tf.assign(
                 self.k_t, tf.clip_by_value(self.k_t + self.lambda_k * self.balance, 0, 1))
+
 
         #kernel = G_conv_var[0]  #
         #x_min = tf.reduce_min(kernel)
@@ -382,7 +409,6 @@ class Trainer(object):
             tf.summary.image("Generated Images", self.x),
             tf.summary.image("Intended Rendering", denorm_img(ren_p)),
             tf.summary.image("Generated Rendering", denorm_img(ren_p_)),
-            tf.summary.image("Generated Images", self.x),
             tf.summary.image("Regressor Input", self.image_3dmm),
             tf.summary.image("Regressor Output", denorm_img(ren_reg)),
             tf.summary.image("Regressor GT", self.annot_3dmm),
@@ -397,9 +423,12 @@ class Trainer(object):
 
             tf.summary.scalar("loss/d_loss", self.d_loss),
             tf.summary.scalar("loss/s_loss", self.s_loss),
+            tf.summary.scalar("loss/p_loss", self.p_loss),
             tf.summary.scalar("loss/g_loss", self.g_loss),
             tf.summary.scalar("loss/ren_loss", self.ren_loss),
             tf.summary.scalar("loss/reg_loss", self.reg_loss),
+            tf.summary.scalar("loss/reg_test_loss", self.reg_test_loss),
+            tf.summary.scalar("loss/reg_latent_loss", self.reg_latent_loss),
             tf.summary.scalar("loss/d_loss_real", self.d_loss_real),
             tf.summary.scalar("loss/d_loss_fake", self.d_loss_fake),
             tf.summary.scalar("misc/measure", self.measure),

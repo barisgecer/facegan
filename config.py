@@ -43,10 +43,13 @@ data_arg.add_argument('--num_worker', type=int, default=4)
 # Training / test parameters
 train_arg = add_argument_group('Training')
 
+train_arg.add_argument('--cont', type=str, default="",choices=['','ren','reg','gen']) # If set, rest should be False
 train_arg.add_argument('--train_renderer', type=str2bool, default=False)
-train_arg.add_argument('--train_regressor', type=str2bool, default=True)
-train_arg.add_argument('--pretrain_generator', type=str2bool, default=False) # True if not pretrained (when train_reg is False)
-train_arg.add_argument('--train_generator', type=str2bool, default=False)
+train_arg.add_argument('--train_regressor', type=str2bool, default=False)
+train_arg.add_argument('--pretrain_generator', type=str2bool, default=True) # True if not pretrained (when train_reg is False)
+train_arg.add_argument('--train_generator', type=str2bool, default=True)
+train_arg.add_argument('--generate_datset', type=str2bool, default=False)
+
 train_arg.add_argument('--pretrained_ren', type=str, default='pretrained_models/ren')
 train_arg.add_argument('--pretrained_reg', type=str, default='pretrained_models/reg')
 train_arg.add_argument('--pretrained_gen', type=str, default='facenet_model/model.ckpt-3284402')
