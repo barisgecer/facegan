@@ -369,15 +369,15 @@ class Trainer(object):
             d_out, self.D_z, D_var = DiscriminatorCNN(name,
                 tf.concat([x, real_image_norm], 0), self.channel, self.z_num, self.repeat_num,
                 self.conv_hidden_num, self.data_format,reuse)
-            AE_x, AE_u = tf.split(d_out, 2)
-            self.AE_x, self.AE_u = denorm_img(AE_x), denorm_img(AE_u)
+            AE_x1, AE_x2, AE_u = tf.split(d_out, 3)
+            AE_x = tf.concat([AE_x1, AE_x2],0)
+            #self.AE_x, self.AE_u = denorm_img(AE_x), denorm_img(AE_u)
 
             # Loss functions
             # Adversarial Training
             d_loss_real = tf.reduce_mean(tf.abs(AE_u - real_image_norm))
-            d_loss_fake = tf.reduce_mean(tf.abs(AE_x - x))
-            d_loss = d_loss_real - k_t * d_loss_fake
             g_loss = tf.reduce_mean(tf.abs(AE_x - x))
+            d_loss = d_loss_real - k_t * g_loss
             balance = self.gamma * d_loss_real - g_loss
             return d_loss, g_loss, balance, D_var
 
@@ -388,12 +388,10 @@ class Trainer(object):
         #self.reg_loss = tf.reduce_mean(tf.abs(ren_reg - norm_img(self.annot_3dmm)))
         #self.reg_test_loss = tf.reduce_mean(tf.abs(ren_reg_test - norm_img(self.annot_3dmm_test)))
         #self.reg_latent_loss = tf.reduce_mean(tf.abs(reg_latent - tf.split(self.latent_3dmm, [451, 61],1)[0]))
-        d_loss_forw, g_loss_forw, balance, D_var_forw = D("D_forw",x, real_image_norm, self.k_t)
-        d_loss_forw_, g_loss_forw_, balance_ ,_ = D("D_forw",x_, real_image_norm, self.k_t, True)
-        d_loss_back, g_loss_back, balance2, D_var_back = D("D_back",y, syn_image, self.k_t2)
-        d_loss_back_, g_loss_back_,balance2_,_ = D("D_back",y_, syn_image, self.k_t2,True)
-        self.g_loss = g_loss_forw + g_loss_back+ g_loss_forw_ + g_loss_back_
-        self.d_loss = d_loss_forw + d_loss_back+ d_loss_forw_ + d_loss_back_
+        d_loss_forw, g_loss_forw, balance, D_var_forw = D("D_forw",tf.concat([x, x_],0), real_image_norm, self.k_t)
+        d_loss_back, g_loss_back, balance2, D_var_back = D("D_back",tf.concat([y, y_],0), syn_image, self.k_t2)
+        self.g_loss = g_loss_forw + g_loss_back
+        self.d_loss = d_loss_forw + d_loss_back
 
         # Optimization
         optimizer = tf.train.AdamOptimizer
@@ -407,14 +405,14 @@ class Trainer(object):
 
         d_optim = d_optimizer.minimize(self.d_loss, var_list=D_var_forw + D_var_back)
 
-        self.balance = balance + balance_#self.gamma * self.d_loss_real - self.g_loss
+        self.balance = balance #self.gamma * self.d_loss_real - self.g_loss
         #self.measure = self.d_loss_real + tf.abs(self.balance)
 
         with tf.control_dependencies([d_optim, g_optim]):
             self.k_update = tf.assign(
-                self.k_t, tf.clip_by_value(self.k_t + self.lambda_k * (balance+balance_), 0, 1))
+                self.k_t, tf.clip_by_value(self.k_t + self.lambda_k * (balance), 0, 1))
             self.k_update2 = tf.assign(
-                self.k_t2, tf.clip_by_value(self.k_t2 + self.lambda_k * (balance2+balance2_), 0, 1))
+                self.k_t2, tf.clip_by_value(self.k_t2 + self.lambda_k * (balance2), 0, 1))
 
 
         #kernel = G_conv_var[0]  #
