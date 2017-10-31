@@ -17,6 +17,7 @@ from operator import itemgetter
 import cv2
 import pickle
 import os.path
+from PIL import Image
 
 #denemes
 def next(loader):
@@ -122,27 +123,17 @@ class Trainer(object):
         self.lr_update_step = config.lr_update_step
 
         self.is_train = config.is_train
-        self.ren_var, self.reg_var, self.gen_var = self.build_model()
+        self.gen_var = self.build_model()
 
         self.summary_writer = tf.summary.FileWriter(self.model_dir)
 
         self.load_pretrain = None
-        if not config.train_renderer:
-            pre_train_saver_ren = tf.train.Saver(self.ren_var)
-            if not config.train_regressor:
-                if not config.pretrain_generator:
-                    pre_train_saver_gen = tf.train.Saver(self.reg_var + self.gen_var)
-                else:
-                    pre_train_saver_reg = tf.train.Saver(self.reg_var)
+        if not config.train_generator:
+            pre_train_saver = tf.train.Saver(self.gen_var)
 
             def load_pretrain(sess):
-                if not config.train_renderer:
-                    pre_train_saver_ren.restore(sess, config.pretrained_ren)
-                    if not config.train_regressor:
-                        if not config.pretrain_generator:
-                            pre_train_saver_gen.restore(sess, config.pretrained_reg)
-                        else:
-                            pre_train_saver_reg.restore(sess, config.pretrained_reg)
+                if not config.train_generator:
+                    pre_train_saver.restore(sess, config.pretrained_gen)
 
             self.load_pretrain = load_pretrain
 
@@ -155,8 +146,8 @@ class Trainer(object):
                                  summary_writer=self.summary_writer,
                                  save_model_secs=300,
                                  global_step=self.step,
-                                 ready_for_local_init_op=None)#,
-                                 #init_fn=self.load_pretrain)
+                                 ready_for_local_init_op=None,
+                                 init_fn=self.load_pretrain)
 
         gpu_options = tf.GPUOptions(allow_growth=True)
         sess_config = tf.ConfigProto(allow_soft_placement=True,
@@ -216,7 +207,7 @@ class Trainer(object):
                 self.sess.run([self.reg_lr_update])
 
     def train(self):
-        self.prepare_session(self.gen_var)
+        self.prepare_session(None)
         # z_fixed = np.random.uniform(-1, 1, size=(self.batch_size, self.z_num))
         # alpha_id_fixed = np.repeat(np.random.randint(self.n_id, size=(int(np.floor(self.batch_size / 4.0)),1)) + 1, 4,0)
 
@@ -263,28 +254,6 @@ class Trainer(object):
                 # cur_measure = np.mean(measure_history)
                 # if cur_measure > prev_measure * 0.99:
                 # prev_measure = cur_measure
-
-    def generate_dataset(self):
-        with open(self.config.syn_data_dir +"/list.txt", "rb") as fp:
-            paths = pickle.load(fp)
-        with open(self.config.syn_data_dir +"/labels.txt", "rb") as fp:
-            labels = pickle.load(fp)
-        with open(self.config.syn_data_dir + "/latentvars.txt", "rb") as fp:
-            latentvars = pickle.load(fp)
-        #
-        # np.random.randn(self.z_num))
-        # self.prepare_session(None)
-        # batch_size = 10
-        # for i in range(1,len(paths),batch_size):
-        #     latentvars(i:min(i+batch_size-1,len(paths)))
-        #     i min(i + batch_size - 1, len(paths))
-        #     x = self.sess.run(self.x, {self.p: inputs})
-        #     for 1 10
-        #         path = os.path.join(root_path, '{}_G.png'.format(idx))
-        #         save_image(x, path,nrow=self.n_im_per_id)
-        #
-        #         im = Image.fromarray(ndarr)
-        #         im.save(filename
 
     # TODO: Refiner Netork
     def build_model(self):
@@ -455,7 +424,7 @@ class Trainer(object):
             tf.summary.scalar("misc/balance", self.balance),
         ])
 
-        return self.G_var, self.G_inv_var, self.G_var
+        return self.G_var#, self.G_inv_var, self.G_var
 
     def build_test_model(self):
         a=2

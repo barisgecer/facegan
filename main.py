@@ -7,12 +7,12 @@ from data_loader import *
 from utils import prepare_dirs_and_logger, save_config
 
 def main(config):
-    if config.train_renderer:
-        config.task = "{}_{}".format(config.task, 'ren')
-    if config.train_regressor:
-        config.task = "{}_{}".format(config.task, 'reg')
-        if config.pretrain_generator:
-            config.task = "{}_{}".format(config.task, 'pregen')
+    #if config.train_renderer:
+    #    config.task = "{}_{}".format(config.task, 'ren')
+    #if config.train_regressor:
+    #    config.task = "{}_{}".format(config.task, 'reg')
+    #    if config.pretrain_generator:
+    #        config.task = "{}_{}".format(config.task, 'pregen')
     if config.train_generator:
         config.task = "{}_{}".format(config.task, 'gen')
 
@@ -54,14 +54,12 @@ def main(config):
 
     if config.is_train:
         save_config(config)
-        if config.train_renderer | (config.cont == 'ren'):
-            trainer.train_renderer()
-        if config.train_regressor | (config.cont == 'reg'):
-            trainer.train_regressor()
+        #if config.train_renderer | (config.cont == 'ren'):
+        #    trainer.train_renderer()
+        #if config.train_regressor | (config.cont == 'reg'):
+        #    trainer.train_regressor()
         if config.train_generator | (config.cont == 'gen'):
             trainer.train()
-        if config.generate_datset:
-            trainer.generate_dataset()
     else:
         if not config.load_path:
             raise Exception("[!] You should specify `load_path` to load a pretrained model")
