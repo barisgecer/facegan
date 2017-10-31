@@ -32,7 +32,7 @@ def get_loader(root, batch_size, scale_size, data_format, split=None, is_graysca
         image = tf.image.rgb_to_grayscale(image)
     image.set_shape(shape)
 
-    min_after_dequeue = 5000
+    min_after_dequeue = 500
     capacity = min_after_dequeue + 3 * batch_size
 
     queue = tf.train.shuffle_batch(
@@ -114,7 +114,7 @@ def get_syn_loader(root, batch_size, scale_size, data_format, split=None, is_gra
         image = tf.image.rgb_to_grayscale(image)
     image.set_shape(shape)
 
-    min_after_dequeue = 5000
+    min_after_dequeue = 500
     capacity = min_after_dequeue + 3 * batch_size
 
     queue_image, queue_label, queue_latentvar = tf.train.shuffle_batch(
@@ -189,7 +189,7 @@ def get_3dmm_loader(root, batch_size, scale_size, data_format, split=None, is_gr
     image.set_shape(shape)
     image_3dmm.set_shape(shape)
 
-    min_after_dequeue = 5000
+    min_after_dequeue = 500
     capacity = min_after_dequeue + 3 * batch_size
 
     queue_image, queue_3dmm, queue_latentvar = tf.train.shuffle_batch(
