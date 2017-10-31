@@ -254,8 +254,8 @@ class Trainer(object):
                 print("[{}/{}] Loss_D: {:.6f} Loss_G: {:.6f} , k_t: {:.4f}". \
                       format(step, self.max_step, d_loss, g_loss, k_t))
 
-            #if step % (self.log_step * self.save_step) == 0:
-                #x_fake = self.generate(fixed_latent, fixed_label, self.model_dir, idx=step)
+            if step % (self.log_step * self.save_step) == 0:
+                x_fake = self.generate(fixed_image, fixed_label, self.model_dir, idx=step)
                 # self.autoencode(x_fixed, self.model_dir, idx=step, x_fake=x_fake)
 
             if step % self.lr_update_step == self.lr_update_step - 1:
@@ -479,7 +479,7 @@ class Trainer(object):
         # self.sess.run(tf.variables_initializer(test_variables))
 
     def generate(self, inputs, alpha_id_fix, root_path=None, path=None, idx=None, save=True):
-        x = self.sess.run(self.x, {self.p: inputs})
+        x = self.sess.run(self.x, {self.syn_image: inputs})
         if path is None and save:
             path = os.path.join(root_path, '{}_G.png'.format(idx))
             save_image(x, path,nrow=self.n_im_per_id)
