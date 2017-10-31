@@ -255,6 +255,25 @@ class Trainer(object):
                 # if cur_measure > prev_measure * 0.99:
                 # prev_measure = cur_measure
 
+    def generate_dataset(self):
+        with open(self.config.syn_data_dir +"/list.txt", "rb") as fp:
+            paths = pickle.load(fp)
+        with open(self.config.syn_data_dir +"/labels.txt", "rb") as fp:
+            labels = pickle.load(fp)
+        with open(self.config.syn_data_dir + "/latentvars.txt", "rb") as fp:
+            latentvars = pickle.load(fp)
+
+        save_dir = os.path.join(self.config.data_dir, self.config.save_syn_dataset)
+        os.makedirs(save_dir)
+        self.prepare_session(self.gen_var)
+        for i in range(0,len(paths),self.config.batch_size):
+            pa = paths[i:min(i + self.config.batch_size, len(paths))]
+            inputs = np.array([cv2.imread(pa[j])[..., ::-1] for j in np.arange(len(pa))])
+            x = self.sess.run(self.x, {self.syn_image: inputs})
+            for im in range(len(x)):
+                os.makedirs(os.path.dirname(pa[im].replace(self.config.syn_data_dir,save_dir)),exist_ok=True)
+                Image.fromarray(x[im].astype(np.uint8)).save(pa[im].replace(self.config.syn_data_dir,save_dir))
+
     # TODO: Refiner Netork
     def build_model(self):
 

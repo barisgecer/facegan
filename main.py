@@ -60,6 +60,8 @@ def main(config):
         #    trainer.train_regressor()
         if config.train_generator | (config.cont == 'gen'):
             trainer.train()
+        if config.generate_dataset:
+            trainer.generate_dataset()
     else:
         if not config.load_path:
             raise Exception("[!] You should specify `load_path` to load a pretrained model")
