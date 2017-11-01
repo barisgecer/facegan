@@ -61,7 +61,7 @@ def slerp(val, low, high):
 
 
 class Trainer(object):
-    def __init__(self, config, real_image, syn_image, syn_label, syn_latent, image_3dmm, annot_3dmm, latent_3dmm, image_3dmm_test, annot_3dmm_test, latent_3dmm_test):
+    def __init__(self, config, real_image, syn_image, syn_label, syn_latent, image_3dmm, annot_3dmm, latent_3dmm):#, image_3dmm_test, annot_3dmm_test, latent_3dmm_test):
         self.config = config
         self.real_image = real_image
         self.syn_image = syn_image
@@ -70,9 +70,9 @@ class Trainer(object):
         self.image_3dmm = image_3dmm
         self.annot_3dmm = annot_3dmm
         self.latent_3dmm = latent_3dmm
-        self.image_3dmm_test = image_3dmm_test
-        self.annot_3dmm_test = annot_3dmm_test
-        self.latent_3dmm_test = latent_3dmm_test
+        #self.image_3dmm_test = image_3dmm_test
+        #self.annot_3dmm_test = annot_3dmm_test
+        #self.latent_3dmm_test = latent_3dmm_test
         self.dataset = config.dataset
         self.n_id_exam_id = config.num_log_id
         self.n_im_per_id = config.num_log_samples
@@ -264,7 +264,7 @@ class Trainer(object):
             latentvars = pickle.load(fp)
 
         save_dir = os.path.join(self.config.data_dir, self.config.save_syn_dataset)
-        os.makedirs(save_dir)
+        os.makedirs(save_dir,exist_ok=True)
         self.prepare_session(self.gen_var)
         for i in range(0,len(paths),self.config.batch_size):
             pa = paths[i:min(i + self.config.batch_size, len(paths))]
@@ -305,7 +305,7 @@ class Trainer(object):
             reuse = False
             if hasattr(self, 'G_var'):
                 reuse = True
-            output, self.G_var = Generator('G_inf', True, ngf=32, norm='instance', image_size=self.input_scale_size,reuse=reuse)(input)
+            output, self.G_var = Generator('G_inf', True, ngf=self.config.conv_hidden_num, norm='instance', image_size=self.input_scale_size,reuse=reuse)(input)
             #AddRealismLayers(input,self.conv_hidden_num,4,self.data_format,reuse=reuse)
             return output
 
@@ -313,7 +313,7 @@ class Trainer(object):
             reuse = False
             if hasattr(self, 'G_inv_var'):
                 reuse = True
-            output, self.G_inv_var = Generator('G_inv', True, ngf=32, norm='instance', image_size=self.input_scale_size, reuse=reuse)(input)
+            output, self.G_inv_var = Generator('G_inv', True, ngf=self.config.conv_hidden_num, norm='instance', image_size=self.input_scale_size, reuse=reuse)(input)
             # AddRealismLayers(input,self.conv_hidden_num,4,self.data_format,reuse=reuse,inv=True)
             return output
 
@@ -383,7 +383,7 @@ class Trainer(object):
 
         # Optimization
         optimizer = tf.train.AdamOptimizer
-        g_optimizer, ren_optimizer,  reg_optimizer, d_optimizer = optimizer(self.g_lr),optimizer(self.ren_lr), optimizer(self.reg_lr), optimizer(self.d_lr)
+        g_optimizer, d_optimizer = optimizer(self.g_lr), optimizer(self.d_lr)
 
         #self.ren_optim = g_optimizer.minimize(self.ren_loss, global_step=self.step,var_list=self.R_var )
 
@@ -413,12 +413,12 @@ class Trainer(object):
             tf.summary.image("Generated Images", self.x),
             #tf.summary.image("Intended Rendering", denorm_img(ren_p)),
             tf.summary.image("Generated Rendering", denorm_img(y)),
-            tf.summary.image("Regressor Input", self.image_3dmm),
+            #tf.summary.image("Regressor Input", self.image_3dmm),
             #tf.summary.image("Regressor Output", denorm_img(ren_reg)),
-            tf.summary.image("Regressor GT", self.annot_3dmm),
-            tf.summary.image("Regressor Input-Test", self.image_3dmm_test),
+            #tf.summary.image("Regressor GT", self.annot_3dmm),
+            #tf.summary.image("Regressor Input-Test", self.image_3dmm_test),
             #tf.summary.image("Regressor Output-Test", denorm_img(ren_reg_test)),
-            tf.summary.image("Regressor GT-Test", self.annot_3dmm_test),
+            #tf.summary.image("Regressor GT-Test", self.annot_3dmm_test),
             #tf.summary.image("Rendering Output", denorm_img(ren_syn)),
             tf.summary.image("Rendering GT", self.syn_image),
             #tf.summary.image("filters", kernel_transposed),
