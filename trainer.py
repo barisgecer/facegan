@@ -320,6 +320,8 @@ class Trainer(object):
         # Define Variables
         self.k_t = tf.Variable(0., trainable=False, name='k_t')
         self.k_t2 = tf.Variable(0., trainable=False, name='k_t2')
+        self.k_t3 = tf.Variable(0., trainable=False, name='k_t3')
+        self.k_t4 = tf.Variable(0., trainable=False, name='k_t4')
         real_image_norm = norm_img(self.real_image)# unlabeled real examples
         #z = tf.random_normal((tf.shape(self.syn_latent)[0], self.z_num)) #noise vector
         #self.p = tf.concat([self.syn_latent, z],1)# 3DMM parameters
@@ -332,12 +334,12 @@ class Trainer(object):
         # Build Graph
         # Generation
         syn_image = norm_img(self.syn_image)
-        x = G(syn_image)
-        y = G_inv(x)
+        y_ = G_inv(real_image_norm)
+        x, x_, paired_x = tf.split(G(tf.concat([syn_image,y_,norm_img(self.annot_3dmm)],0)),3)
+        y, paired_y = tf.split(G_inv(tf.concat([x,norm_img(self.image_3dmm)],0)),2)
         self.x = denorm_img(x)
 
-        y_ = G_inv(real_image_norm)
-        x_ = G(y_)
+
 
 
         # Rendering
@@ -371,6 +373,15 @@ class Trainer(object):
 
         self.p_loss = tf.reduce_mean(tf.abs(real_image_norm - x_))
         self.s_loss = tf.reduce_mean(tf.abs(syn_image - y))
+
+        sd_loss_real_forw = tf.reduce_mean(tf.abs(paired_y - norm_img(self.annot_3dmm)))
+        sd_loss_forw = sd_loss_real_forw - self.k_t3 * self.s_loss
+        balance3 = self.gamma * sd_loss_real_forw - self.s_loss
+
+        sd_loss_real_back = tf.reduce_mean(tf.abs(paired_x - norm_img(self.image_3dmm)))
+        sd_loss_back = sd_loss_real_back - self.k_t4 * self.s_loss
+        balance4 = self.gamma * sd_loss_real_back - self.s_loss
+
         # Pretrain
         #self.ren_loss = tf.reduce_mean(tf.abs(ren_syn - norm_img(self.syn_image)))
         #self.reg_loss = tf.reduce_mean(tf.abs(ren_reg - norm_img(self.annot_3dmm)))
@@ -383,24 +394,30 @@ class Trainer(object):
 
         # Optimization
         optimizer = tf.train.AdamOptimizer
-        g_optimizer, d_optimizer = optimizer(self.g_lr), optimizer(self.d_lr)
+        g_optimizer, g_inv_optimizer, d_optimizer = optimizer(self.g_lr), optimizer(self.g_lr), optimizer(self.d_lr)
 
         #self.ren_optim = g_optimizer.minimize(self.ren_loss, global_step=self.step,var_list=self.R_var )
 
         #self.reg_optim = g_optimizer.minimize(self.reg_loss, global_step=self.step,var_list=self.G_inv_var )
 
-        g_optim = g_optimizer.minimize(self.g_loss + self.config.lambda_s *(self.p_loss+self.s_loss), global_step=self.step, var_list=self.G_var+ self.G_inv_var )
+        g_optim = g_optimizer.minimize(g_loss_back +sd_loss_back + self.config.lambda_s *(self.p_loss+self.s_loss), global_step=self.step, var_list=self.G_var )
+
+        g_inv_optim = g_inv_optimizer.minimize(g_loss_forw + sd_loss_forw + self.config.lambda_s *(self.p_loss+self.s_loss), global_step=self.step, var_list=self.G_inv_var )
 
         d_optim = d_optimizer.minimize(self.d_loss, var_list=D_var_forw + D_var_back)
 
         self.balance = balance #self.gamma * self.d_loss_real - self.g_loss
         #self.measure = self.d_loss_real + tf.abs(self.balance)
 
-        with tf.control_dependencies([d_optim, g_optim]):
+        with tf.control_dependencies([d_optim, g_optim, g_inv_optim]):
             self.k_update = tf.assign(
                 self.k_t, tf.clip_by_value(self.k_t + self.lambda_k * (balance), 0, 1))
             self.k_update2 = tf.assign(
                 self.k_t2, tf.clip_by_value(self.k_t2 + self.lambda_k * (balance2), 0, 1))
+            self.k_update3 = tf.assign(
+                self.k_t3, tf.clip_by_value(self.k_t3 + self.lambda_k * (balance3), 0, 1))
+            self.k_update4 = tf.assign(
+                self.k_t4, tf.clip_by_value(self.k_t4 + self.lambda_k * (balance4), 0, 1))
 
 
         #kernel = G_conv_var[0]  #
