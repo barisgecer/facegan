@@ -28,9 +28,11 @@ def get_branch_name():
 net_arg = add_argument_group('Network')
 net_arg.add_argument('--input_scale_size', type=int, default=64,#64
                      help='input image will be resized with the given value as width and height')
-net_arg.add_argument('--conv_hidden_num', type=int, default=32,
+net_arg.add_argument('--conv_hidden_num', type=int, default=64,
                      choices=[64, 128],help='n in the paper')
-net_arg.add_argument('--z_num', type=int, default=61, choices=[64, 128])
+net_arg.add_argument('--conv_hidden_num_res', type=int, default=32,
+                     choices=[64, 128],help='n in the paper')
+net_arg.add_argument('--z_num', type=int, default=64, choices=[64, 128])
 
 # Data
 data_arg = add_argument_group('Data')
@@ -71,7 +73,7 @@ train_arg.add_argument('--beta2', type=float, default=0.999)
 train_arg.add_argument('--gamma', type=float, default=0.5)
 train_arg.add_argument('--lambda_k', type=float, default=0.001)
 train_arg.add_argument('--use_gpu', type=str2bool, default=True)
-train_arg.add_argument('--lambda_ren', type=float, default=0.2, help='')
+train_arg.add_argument('--lambda_d', type=float, default=0.5, help='')
 train_arg.add_argument('--lambda_s', type=float, default=0.5, help='')
 
 # Misc
@@ -79,8 +81,8 @@ misc_arg = add_argument_group('Misc')
 misc_arg.add_argument('--load_path', type=str, default='')
 misc_arg.add_argument('--log_step', type=int, default=50)
 misc_arg.add_argument('--save_step', type=int, default=20)
-misc_arg.add_argument('--num_log_id', type=int, default=4)
-misc_arg.add_argument('--num_log_samples', type=int, default=4)
+misc_arg.add_argument('--num_log_id', type=int, default=10)
+misc_arg.add_argument('--num_log_samples', type=int, default=8)
 misc_arg.add_argument('--log_level', type=str, default='INFO', choices=['INFO', 'DEBUG', 'WARN'])
 misc_arg.add_argument('--log_dir', type=str, default='logs')
 misc_arg.add_argument('--data_dir', type=str, default='c:/data')

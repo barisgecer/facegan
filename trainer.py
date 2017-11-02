@@ -305,7 +305,7 @@ class Trainer(object):
             reuse = False
             if hasattr(self, 'G_var'):
                 reuse = True
-            output, self.G_var = Generator('G_inf', True, ngf=self.config.conv_hidden_num, norm='instance', image_size=self.input_scale_size,reuse=reuse)(input)
+            output, self.G_var = Generator('G_inf', True, ngf=self.config.conv_hidden_num_res, norm='instance', image_size=self.input_scale_size,reuse=reuse)(input)
             #AddRealismLayers(input,self.conv_hidden_num,4,self.data_format,reuse=reuse)
             return output
 
@@ -313,7 +313,7 @@ class Trainer(object):
             reuse = False
             if hasattr(self, 'G_inv_var'):
                 reuse = True
-            output, self.G_inv_var = Generator('G_inv', True, ngf=self.config.conv_hidden_num, norm='instance', image_size=self.input_scale_size, reuse=reuse)(input)
+            output, self.G_inv_var = Generator('G_inv', True, ngf=self.config.conv_hidden_num_res, norm='instance', image_size=self.input_scale_size, reuse=reuse)(input)
             # AddRealismLayers(input,self.conv_hidden_num,4,self.data_format,reuse=reuse,inv=True)
             return output
 
@@ -335,6 +335,8 @@ class Trainer(object):
         # Generation
         syn_image = norm_img(self.syn_image)
         y_ = G_inv(real_image_norm)
+        #syn_image_noise = tf.concat(syn_image, tf.random_normal((tf.shape(syn_image)[1], tf.shape(syn_image)[2])),3)
+        #y_noise_ = tf.concat(y_, tf.random_normal((tf.shape(y_)[1], tf.shape(y_)[2])),3)
         x, x_, paired_x = tf.split(G(tf.concat([syn_image,y_,norm_img(self.annot_3dmm)],0)),3)
         y, paired_y = tf.split(G_inv(tf.concat([x,norm_img(self.image_3dmm)],0)),2)
         self.x = denorm_img(x)
@@ -369,7 +371,7 @@ class Trainer(object):
             g_loss = tf.reduce_mean(tf.abs(AE_x - x))
             d_loss = d_loss_real - k_t * g_loss
             balance = self.gamma * d_loss_real - g_loss
-            return d_loss, g_loss, balance, D_var
+            return d_loss, g_loss, balance, D_var, AE_x1 , AE_u
 
         self.p_loss = tf.reduce_mean(tf.abs(real_image_norm - x_))
         self.s_loss = tf.reduce_mean(tf.abs(syn_image - y))
@@ -379,16 +381,16 @@ class Trainer(object):
         balance3 = self.gamma * sd_loss_real_forw - self.s_loss
 
         sd_loss_real_back = tf.reduce_mean(tf.abs(paired_x - norm_img(self.image_3dmm)))
-        sd_loss_back = sd_loss_real_back - self.k_t4 * self.s_loss
-        balance4 = self.gamma * sd_loss_real_back - self.s_loss
+        sd_loss_back = sd_loss_real_back - self.k_t4 * self.p_loss
+        balance4 = self.gamma * sd_loss_real_back - self.p_loss
 
         # Pretrain
         #self.ren_loss = tf.reduce_mean(tf.abs(ren_syn - norm_img(self.syn_image)))
         #self.reg_loss = tf.reduce_mean(tf.abs(ren_reg - norm_img(self.annot_3dmm)))
         #self.reg_test_loss = tf.reduce_mean(tf.abs(ren_reg_test - norm_img(self.annot_3dmm_test)))
         #self.reg_latent_loss = tf.reduce_mean(tf.abs(reg_latent - tf.split(self.latent_3dmm, [451, 61],1)[0]))
-        d_loss_forw, g_loss_forw, balance, D_var_forw = D("D_forw",tf.concat([x, x_],0), real_image_norm, self.k_t)
-        d_loss_back, g_loss_back, balance2, D_var_back = D("D_back",tf.concat([y, y_],0), syn_image, self.k_t2)
+        d_loss_forw, g_loss_forw, balance, D_var_forw, self.AE_x, self.AE_u = D("D_forw",tf.concat([x, x_],0), real_image_norm, self.k_t)
+        d_loss_back, g_loss_back, balance2, D_var_back, _, _ = D("D_back",tf.concat([y, y_],0), syn_image, self.k_t2)
         self.g_loss = g_loss_forw + g_loss_back
         self.d_loss = d_loss_forw + d_loss_back
 
@@ -400,9 +402,9 @@ class Trainer(object):
 
         #self.reg_optim = g_optimizer.minimize(self.reg_loss, global_step=self.step,var_list=self.G_inv_var )
 
-        g_optim = g_optimizer.minimize(g_loss_back +sd_loss_back + self.config.lambda_s *(self.p_loss+self.s_loss), global_step=self.step, var_list=self.G_var )
+        g_optim = g_optimizer.minimize(g_loss_back + self.config.lambda_d*sd_loss_back + self.config.lambda_s *(self.p_loss+self.s_loss), global_step=self.step, var_list=self.G_var )
 
-        g_inv_optim = g_inv_optimizer.minimize(g_loss_forw + sd_loss_forw + self.config.lambda_s *(self.p_loss+self.s_loss), global_step=self.step, var_list=self.G_inv_var )
+        g_inv_optim = g_inv_optimizer.minimize(g_loss_forw + self.config.lambda_d*sd_loss_forw + self.config.lambda_s *(self.p_loss+self.s_loss), global_step=self.step, var_list=self.G_inv_var )
 
         d_optim = d_optimizer.minimize(self.d_loss, var_list=D_var_forw + D_var_back)
 
@@ -439,13 +441,15 @@ class Trainer(object):
             #tf.summary.image("Rendering Output", denorm_img(ren_syn)),
             tf.summary.image("Rendering GT", self.syn_image),
             #tf.summary.image("filters", kernel_transposed),
-            #tf.summary.image("AE_x", self.AE_x),
-            #tf.summary.image("AE_u", self.AE_u),
+            tf.summary.image("AE_x", self.AE_x),
+            tf.summary.image("AE_u", self.AE_u),
 
             tf.summary.scalar("loss/d_loss", self.d_loss),
             tf.summary.scalar("loss/s_loss", self.s_loss),
             tf.summary.scalar("loss/p_loss", self.p_loss),
             tf.summary.scalar("loss/g_loss", self.g_loss),
+            tf.summary.scalar("loss/g_loss_back", g_loss_back),
+            tf.summary.scalar("loss/sd_loss_back", sd_loss_back),
             #tf.summary.scalar("loss/ren_loss", self.ren_loss),
             #tf.summary.scalar("loss/reg_loss", self.reg_loss),
             #tf.summary.scalar("loss/reg_test_loss", self.reg_test_loss),
@@ -482,7 +486,9 @@ class Trainer(object):
         # self.sess.run(tf.variables_initializer(test_variables))
 
     def generate(self, inputs, alpha_id_fix, root_path=None, path=None, idx=None, save=True):
-        x = self.sess.run(self.x, {self.syn_image: inputs})
+
+        x = np.array([self.sess.run(self.x, {self.syn_image: inputs[i:min(i + self.config.batch_size, len(inputs))]}) for i in range(0,len(inputs),self.config.batch_size)])
+        x = x.reshape((-1,)+x.shape[2:])
         if path is None and save:
             path = os.path.join(root_path, '{}_G.png'.format(idx))
             save_image(x, path,nrow=self.n_im_per_id)
