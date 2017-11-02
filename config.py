@@ -73,7 +73,7 @@ train_arg.add_argument('--beta2', type=float, default=0.999)
 train_arg.add_argument('--gamma', type=float, default=0.5)
 train_arg.add_argument('--lambda_k', type=float, default=0.001)
 train_arg.add_argument('--use_gpu', type=str2bool, default=True)
-train_arg.add_argument('--lambda_d', type=float, default=0.5, help='')
+train_arg.add_argument('--lambda_d', type=float, default=0, help='')
 train_arg.add_argument('--lambda_s', type=float, default=0.5, help='')
 
 # Misc

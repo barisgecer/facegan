@@ -402,9 +402,9 @@ class Trainer(object):
 
         #self.reg_optim = g_optimizer.minimize(self.reg_loss, global_step=self.step,var_list=self.G_inv_var )
 
-        g_optim = g_optimizer.minimize(g_loss_back + self.config.lambda_d*sd_loss_back + self.config.lambda_s *(self.p_loss+self.s_loss), global_step=self.step, var_list=self.G_var )
+        g_optim = g_optimizer.minimize(g_loss_forw + self.config.lambda_d*sd_loss_back + self.config.lambda_s *(self.p_loss+self.s_loss), global_step=self.step, var_list=self.G_var )
 
-        g_inv_optim = g_inv_optimizer.minimize(g_loss_forw + self.config.lambda_d*sd_loss_forw + self.config.lambda_s *(self.p_loss+self.s_loss), global_step=self.step, var_list=self.G_inv_var )
+        g_inv_optim = g_inv_optimizer.minimize(g_loss_back + self.config.lambda_d*sd_loss_forw + self.config.lambda_s *(self.p_loss+self.s_loss), global_step=self.step, var_list=self.G_inv_var )
 
         d_optim = d_optimizer.minimize(self.d_loss, var_list=D_var_forw + D_var_back)
 
