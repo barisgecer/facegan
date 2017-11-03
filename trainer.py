@@ -355,14 +355,18 @@ class Trainer(object):
 
         #ren_reg_test = G_inv(norm_img(self.image_3dmm_test))
 
-        def D(name,x, real_image_norm, k_t, reuse=False):
+        def D(name,x, real_image_norm, k_t, reuse=False, two_x = False):
             # TODO: Patch-based Discriminator
             # TODO: History of generated images
             d_out, self.D_z, D_var = DiscriminatorCNN(name,
                 tf.concat([x, real_image_norm], 0), self.channel, self.z_num, self.repeat_num,
                 self.conv_hidden_num, self.data_format,reuse)
-            AE_x1, AE_x2, AE_u = tf.split(d_out, 3)
-            AE_x = tf.concat([AE_x1, AE_x2],0)
+            if two_x:
+                AE_x1, AE_x2, AE_u = tf.split(d_out, 3)
+                AE_x = tf.concat([AE_x1, AE_x2],0)
+            else:
+                AE_x, AE_u = tf.split(d_out, 2)
+                AE_x1 = AE_x
             #self.AE_x, self.AE_u = denorm_img(AE_x), denorm_img(AE_u)
 
             # Loss functions
@@ -389,8 +393,8 @@ class Trainer(object):
         #self.reg_loss = tf.reduce_mean(tf.abs(ren_reg - norm_img(self.annot_3dmm)))
         #self.reg_test_loss = tf.reduce_mean(tf.abs(ren_reg_test - norm_img(self.annot_3dmm_test)))
         #self.reg_latent_loss = tf.reduce_mean(tf.abs(reg_latent - tf.split(self.latent_3dmm, [451, 61],1)[0]))
-        d_loss_forw, g_loss_forw, balance, D_var_forw, self.AE_x, self.AE_u = D("D_forw",tf.concat([x, x_],0), real_image_norm, self.k_t)
-        d_loss_back, g_loss_back, balance2, D_var_back, _, _ = D("D_back",tf.concat([y, y_],0), syn_image, self.k_t2)
+        d_loss_forw, g_loss_forw, balance, D_var_forw, self.AE_x, self.AE_u = D("D_forw",x, real_image_norm, self.k_t)
+        d_loss_back, g_loss_back, balance2, D_var_back, _, _ = D("D_back",tf.concat([y, y_],0), syn_image, self.k_t2, two_x=True)
         self.g_loss = g_loss_forw + g_loss_back
         self.d_loss = d_loss_forw + d_loss_back
 
@@ -402,9 +406,9 @@ class Trainer(object):
 
         #self.reg_optim = g_optimizer.minimize(self.reg_loss, global_step=self.step,var_list=self.G_inv_var )
 
-        g_optim = g_optimizer.minimize(g_loss_forw + self.config.lambda_d*sd_loss_back + self.config.lambda_s *(self.p_loss+self.s_loss), global_step=self.step, var_list=self.G_var )
+        g_optim = g_optimizer.minimize(g_loss_forw + self.config.lambda_s *(self.s_loss), global_step=self.step, var_list=self.G_var )
 
-        g_inv_optim = g_inv_optimizer.minimize(g_loss_back + self.config.lambda_d*sd_loss_forw + self.config.lambda_s *(self.p_loss+self.s_loss), global_step=self.step, var_list=self.G_inv_var )
+        g_inv_optim = g_inv_optimizer.minimize(g_loss_back + self.config.lambda_d*sd_loss_forw + self.config.lambda_s *(self.s_loss), global_step=self.step, var_list=self.G_inv_var )
 
         d_optim = d_optimizer.minimize(self.d_loss, var_list=D_var_forw + D_var_back)
 
