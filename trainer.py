@@ -84,8 +84,8 @@ class Trainer(object):
 
         self.step = tf.Variable(0, name='step', trainable=False)
 
-        self.g_lr = tf.Variable(config.g_lr, name='g_lr')
-        self.d_lr = tf.Variable(config.d_lr, name='d_lr')
+        self.g_lr = tf.Variable(config.g_lr * config.num_gpu, name='g_lr')
+        self.d_lr = tf.Variable(config.d_lr * config.num_gpu, name='d_lr')
         self.ren_lr = tf.Variable(config.ren_lr, name='ren_lr')
         self.reg_lr = tf.Variable(config.reg_lr, name='reg_lr')
 
@@ -274,199 +274,241 @@ class Trainer(object):
                 os.makedirs(os.path.dirname(pa[im].replace(self.config.syn_data_dir,save_dir)),exist_ok=True)
                 Image.fromarray(x[im].astype(np.uint8)).save(pa[im].replace(self.config.syn_data_dir,save_dir))
 
-    # TODO: Refiner Netork
     def build_model(self):
+        def average_gradients(tower_grads):
+            average_grads = []
+            for grad_and_vars in zip(*tower_grads):
+                # Note that each grad_and_vars looks like the following:
+                #   ((grad0_gpu0, var0_gpu0), ... , (grad0_gpuN, var0_gpuN))
+                grads = []
+                for g, _ in grad_and_vars:
+                    # Add 0 dimension to the gradients to represent the tower.
+                    expanded_g = tf.expand_dims(g, 0)
 
-        def R(input):
-            reuse = False
-            if hasattr(self, 'R_var'):
-                reuse = True
-            output, self.R_var = GeneratorCNN("R",input, self.conv_hidden_num, self.channel,
-                self.repeat_num, self.data_format, reuse=reuse)
-            return output
+                    # Append on a 'tower' dimension which we will average over below.
+                    grads.append(expanded_g)
 
-        # def G(input):
-        #     reuse = False
-        #     if hasattr(self, 'G_var'):
-        #         reuse = True
-        #     output, self.G_var = GeneratorCNN("G_inf",input, self.conv_hidden_num, self.channel,
-        #         self.repeat_num, self.data_format, reuse=reuse)
-        #     return output
-        #
-        # def G_inv(input):
-        #     reuse = False
-        #     if hasattr(self, 'G_inv_var'):
-        #         reuse = True
-        #     output, self.G_inv_var = RegressionCNN("G_inv",input, self.conv_hidden_num, self.syn_latent.get_shape()[1].value,
-        #         self.repeat_num, self.data_format, reuse=reuse)
-        #     return output
+                # Average over the 'tower' dimension.
+                grad = tf.concat(grads, 0)
+                grad = tf.reduce_mean(grad, 0)
 
-        def G(input):
-            reuse = False
-            if hasattr(self, 'G_var'):
-                reuse = True
-            output, self.G_var = Generator('G_inf', True, ngf=self.config.conv_hidden_num_res, norm='instance', image_size=self.input_scale_size,reuse=reuse)(input)
-            #AddRealismLayers(input,self.conv_hidden_num,4,self.data_format,reuse=reuse)
-            return output
+                # Keep in mind that the Variables are redundant because they are shared
+                # across towers. So .. we will just return the first tower's pointer to
+                # the Variable.
+                v = grad_and_vars[0][1]
+                grad_and_var = (grad, v)
+                average_grads.append(grad_and_var)
+            return average_grads
 
-        def G_inv(input):
-            reuse = False
-            if hasattr(self, 'G_inv_var'):
-                reuse = True
-            output, self.G_inv_var = Generator('G_inv', True, ngf=self.config.conv_hidden_num_res, norm='instance', image_size=self.input_scale_size, reuse=reuse)(input)
-            # AddRealismLayers(input,self.conv_hidden_num,4,self.data_format,reuse=reuse,inv=True)
-            return output
+        with tf.device('/cpu:0'):
+            tower_grads_G = []
+            tower_grads_G_inv = []
+            tower_grads_D = []
+            reuse_vars = False
 
-        # Define Variables
-        self.k_t = tf.Variable(0., trainable=False, name='k_t')
-        self.k_t2 = tf.Variable(0., trainable=False, name='k_t2')
-        self.k_t3 = tf.Variable(0., trainable=False, name='k_t3')
-        self.k_t4 = tf.Variable(0., trainable=False, name='k_t4')
-        real_image_norm = norm_img(self.real_image)# unlabeled real examples
-        #z = tf.random_normal((tf.shape(self.syn_latent)[0], self.z_num)) #noise vector
-        #self.p = tf.concat([self.syn_latent, z],1)# 3DMM parameters
-        #c = self.syn_label # identity label
-        #c_onehot = tf.squeeze(tf.one_hot(c, depth=self.n_id, on_value=1.0, off_value=0.0),1)
-        #self.s = self.annot_3dmm
-        #mask = tf.cast(tf.greater(self.s, 0), tf.float32)
-        #s_norm = norm_img(self.s)
+            optimizer = tf.train.AdamOptimizer
+            g_optimizer, g_inv_optimizer, d_optimizer = optimizer(self.g_lr), optimizer(self.g_lr), optimizer(self.d_lr)
 
-        # Build Graph
-        # Generation
-        syn_image = norm_img(self.syn_image)
-        y_ = G_inv(real_image_norm)
-        #syn_image_noise = tf.concat(syn_image, tf.random_normal((tf.shape(syn_image)[1], tf.shape(syn_image)[2])),3)
-        #y_noise_ = tf.concat(y_, tf.random_normal((tf.shape(y_)[1], tf.shape(y_)[2])),3)
-        x, x_, paired_x = tf.split(G(tf.concat([syn_image,y_,norm_img(self.annot_3dmm)],0)),3)
-        y, paired_y = tf.split(G_inv(tf.concat([x,norm_img(self.image_3dmm)],0)),2)
-        self.x = denorm_img(x)
+            for i in range(self.config.num_gpu):
+                gpu_ind = slice(i * self.config.batch_size, (i + 1) * self.config.batch_size)
+                with tf.device('/gpu:%d' % i):
+                    def R(input):
+                        reuse = reuse_vars
+                        if hasattr(self, 'R_var'):
+                            reuse = True
+                        output, self.R_var = GeneratorCNN("R",input, self.conv_hidden_num, self.channel,
+                            self.repeat_num, self.data_format, reuse=reuse)
+                        return output
 
+                    # def G(input):
+                    #     reuse = False
+                    #     if hasattr(self, 'G_var'):
+                    #         reuse = True
+                    #     output, self.G_var = GeneratorCNN("G_inf",input, self.conv_hidden_num, self.channel,
+                    #         self.repeat_num, self.data_format, reuse=reuse)
+                    #     return output
+                    #
+                    # def G_inv(input):
+                    #     reuse = False
+                    #     if hasattr(self, 'G_inv_var'):
+                    #         reuse = True
+                    #     output, self.G_inv_var = RegressionCNN("G_inv",input, self.conv_hidden_num, self.syn_latent.get_shape()[1].value,
+                    #         self.repeat_num, self.data_format, reuse=reuse)
+                    #     return output
 
+                    def G(input):
+                        reuse = reuse_vars
+                        if hasattr(self, 'G_var'):
+                            reuse = True
+                        output, self.G_var = Generator('G_inf', True, ngf=self.config.conv_hidden_num_res, norm='instance', image_size=self.input_scale_size,reuse=reuse)(input)
+                        #AddRealismLayers(input,self.conv_hidden_num,4,self.data_format,reuse=reuse)
+                        return output
 
+                    def G_inv(input):
+                        reuse = reuse_vars
+                        if hasattr(self, 'G_inv_var'):
+                            reuse = True
+                        output, self.G_inv_var = Generator('G_inv', True, ngf=self.config.conv_hidden_num_res, norm='instance', image_size=self.input_scale_size, reuse=reuse)(input)
+                        # AddRealismLayers(input,self.conv_hidden_num,4,self.data_format,reuse=reuse,inv=True)
+                        return output
 
-        # Rendering
-        #ren_syn = R(self.syn_latent)
-        #ren_p = R(self.syn_latent)
-        #ren_p_ = R(p_) #tf.split(p_, [451, 61],1)[0]
+                    # Define Variables
+                    self.k_t = tf.Variable(0., trainable=False, name='k_t')
+                    self.k_t2 = tf.Variable(0., trainable=False, name='k_t2')
+                    self.k_t3 = tf.Variable(0., trainable=False, name='k_t3')
+                    #self.k_t4 = tf.Variable(0., trainable=False, name='k_t4')
+                    real_image_norm = norm_img(self.real_image[gpu_ind])# unlabeled real examples
+                    #z = tf.random_normal((tf.shape(self.syn_latent)[0], self.z_num)) #noise vector
+                    #self.p = tf.concat([self.syn_latent, z],1)# 3DMM parameters
+                    #c = self.syn_label # identity label
+                    #c_onehot = tf.squeeze(tf.one_hot(c, depth=self.n_id, on_value=1.0, off_value=0.0),1)
+                    #self.s = self.annot_3dmm
+                    #mask = tf.cast(tf.greater(self.s, 0), tf.float32)
+                    #s_norm = norm_img(self.s)
 
-        # Regression
-        #ren_reg = G_inv(norm_img(self.image_3dmm))
-        #ren_reg = R(reg_latent)
+                    # Build Graph
+                    # Generation
+                    syn_image = norm_img(self.syn_image[gpu_ind])
+                    y_ = G_inv(real_image_norm)
+                    #syn_image_noise = tf.concat(syn_image, tf.random_normal((tf.shape(syn_image)[1], tf.shape(syn_image)[2])),3)
+                    #y_noise_ = tf.concat(y_, tf.random_normal((tf.shape(y_)[1], tf.shape(y_)[2])),3)
+                    x, x_, paired_x = tf.split(G(tf.concat([syn_image,y_,norm_img(self.annot_3dmm[gpu_ind])],0)),3)
+                    y, paired_y = tf.split(G_inv(tf.concat([x,norm_img(self.image_3dmm[gpu_ind])],0)),2)
+                    self.x = denorm_img(x)
 
-        #ren_reg_test = G_inv(norm_img(self.image_3dmm_test))
+                    # Rendering
+                    #ren_syn = R(self.syn_latent)
+                    #ren_p = R(self.syn_latent)
+                    #ren_p_ = R(p_) #tf.split(p_, [451, 61],1)[0]
 
-        def D(name,x, real_image_norm, k_t, reuse=False, two_x = False):
-            # TODO: Patch-based Discriminator
-            # TODO: History of generated images
-            d_out, self.D_z, D_var = DiscriminatorCNN(name,
-                tf.concat([x, real_image_norm], 0), self.channel, self.z_num, self.repeat_num,
-                self.conv_hidden_num, self.data_format,reuse)
-            if two_x:
-                AE_x1, AE_x2, AE_u = tf.split(d_out, 3)
-                AE_x = tf.concat([AE_x1, AE_x2],0)
-            else:
-                AE_x, AE_u = tf.split(d_out, 2)
-                AE_x1 = AE_x
-            #self.AE_x, self.AE_u = denorm_img(AE_x), denorm_img(AE_u)
+                    # Regression
+                    #ren_reg = G_inv(norm_img(self.image_3dmm))
+                    #ren_reg = R(reg_latent)
 
-            # Loss functions
-            # Adversarial Training
-            d_loss_real = tf.reduce_mean(tf.abs(AE_u - real_image_norm))
-            g_loss = tf.reduce_mean(tf.abs(AE_x - x))
-            d_loss = d_loss_real - k_t * g_loss
-            balance = self.gamma * d_loss_real - g_loss
-            return d_loss, g_loss, balance, D_var, AE_x1 , AE_u
+                    #ren_reg_test = G_inv(norm_img(self.image_3dmm_test))
 
-        self.p_loss = tf.reduce_mean(tf.abs(real_image_norm - x_))
-        self.s_loss = tf.reduce_mean(tf.abs(syn_image - y))
+                    def D(name,x, real_image_norm, k_t, reuse=False, two_x = False):
+                        # TO-DO: Patch-based Discriminator
+                        # TO-DO: History of generated images
+                        d_out, self.D_z, D_var = DiscriminatorCNN(name,
+                            tf.concat([x, real_image_norm], 0), self.channel, self.z_num, self.repeat_num,
+                            self.conv_hidden_num, self.data_format,(reuse | reuse_vars))
+                        if two_x:
+                            AE_x1, AE_x2, AE_u = tf.split(d_out, 3)
+                            AE_x = tf.concat([AE_x1, AE_x2],0)
+                        else:
+                            AE_x, AE_u = tf.split(d_out, 2)
+                            AE_x1 = AE_x
+                        #self.AE_x, self.AE_u = denorm_img(AE_x), denorm_img(AE_u)
 
-        sd_loss_real_forw = tf.reduce_mean(tf.abs(paired_y - norm_img(self.annot_3dmm)))
-        sd_loss_forw = sd_loss_real_forw - self.k_t3 * self.s_loss
-        balance3 = self.gamma * sd_loss_real_forw - self.s_loss
+                        # Loss functions
+                        # Adversarial Training
+                        d_loss_real = tf.reduce_mean(tf.abs(AE_u - real_image_norm))
+                        g_loss = tf.reduce_mean(tf.abs(AE_x - x))
+                        d_loss = d_loss_real - k_t * g_loss
+                        balance = self.gamma * d_loss_real - g_loss
+                        return d_loss, g_loss, balance, D_var, AE_x1 , AE_u
 
-        sd_loss_real_back = tf.reduce_mean(tf.abs(paired_x - norm_img(self.image_3dmm)))
-        sd_loss_back = sd_loss_real_back - self.k_t4 * self.p_loss
-        balance4 = self.gamma * sd_loss_real_back - self.p_loss
+                    #self.p_loss = tf.reduce_mean(tf.abs(real_image_norm - x_))
+                    self.s_loss = tf.reduce_mean(tf.abs(syn_image - y))
 
-        # Pretrain
-        #self.ren_loss = tf.reduce_mean(tf.abs(ren_syn - norm_img(self.syn_image)))
-        #self.reg_loss = tf.reduce_mean(tf.abs(ren_reg - norm_img(self.annot_3dmm)))
-        #self.reg_test_loss = tf.reduce_mean(tf.abs(ren_reg_test - norm_img(self.annot_3dmm_test)))
-        #self.reg_latent_loss = tf.reduce_mean(tf.abs(reg_latent - tf.split(self.latent_3dmm, [451, 61],1)[0]))
-        d_loss_forw, g_loss_forw, balance, D_var_forw, self.AE_x, self.AE_u = D("D_forw",x, real_image_norm, self.k_t)
-        d_loss_back, g_loss_back, balance2, D_var_back, _, _ = D("D_back",tf.concat([y, y_],0), syn_image, self.k_t2, two_x=True)
-        self.g_loss = g_loss_forw + g_loss_back
-        self.d_loss = d_loss_forw + d_loss_back
+                    sd_loss_real_forw = tf.reduce_mean(tf.abs(paired_y - norm_img(self.annot_3dmm[gpu_ind])))
+                    sd_loss_forw = sd_loss_real_forw - self.k_t3 * self.s_loss
+                    balance3 = self.gamma * sd_loss_real_forw - self.s_loss
 
-        # Optimization
-        optimizer = tf.train.AdamOptimizer
-        g_optimizer, g_inv_optimizer, d_optimizer = optimizer(self.g_lr), optimizer(self.g_lr), optimizer(self.d_lr)
+                    #sd_loss_real_back = tf.reduce_mean(tf.abs(paired_x - norm_img(self.image_3dmm[gpu_ind])))
+                    #sd_loss_back = sd_loss_real_back - self.k_t4 * self.p_loss
+                    #balance4 = self.gamma * sd_loss_real_back - self.p_loss
 
-        #self.ren_optim = g_optimizer.minimize(self.ren_loss, global_step=self.step,var_list=self.R_var )
+                    # Pretrain
+                    #self.ren_loss = tf.reduce_mean(tf.abs(ren_syn - norm_img(self.syn_image)))
+                    #self.reg_loss = tf.reduce_mean(tf.abs(ren_reg - norm_img(self.annot_3dmm)))
+                    #self.reg_test_loss = tf.reduce_mean(tf.abs(ren_reg_test - norm_img(self.annot_3dmm_test)))
+                    #self.reg_latent_loss = tf.reduce_mean(tf.abs(reg_latent - tf.split(self.latent_3dmm, [451, 61],1)[0]))
+                    d_loss_forw, g_loss_forw, balance, D_var_forw, self.AE_x, self.AE_u = D("D_forw",x, real_image_norm, self.k_t)
+                    d_loss_back, g_loss_back, balance2, D_var_back, _, _ = D("D_back",tf.concat([y, y_],0), syn_image, self.k_t2, two_x=True)
+                    self.g_loss = g_loss_forw + g_loss_back
+                    self.d_loss = d_loss_forw + d_loss_back
 
-        #self.reg_optim = g_optimizer.minimize(self.reg_loss, global_step=self.step,var_list=self.G_inv_var )
+                    # Optimization
 
-        g_optim = g_optimizer.minimize(g_loss_forw + self.config.lambda_s *(self.s_loss), global_step=self.step, var_list=self.G_var )
+                    #self.ren_optim = g_optimizer.minimize(self.ren_loss, global_step=self.step,var_list=self.R_var )
 
-        g_inv_optim = g_inv_optimizer.minimize(g_loss_back + self.config.lambda_d*sd_loss_forw + self.config.lambda_s *(self.s_loss), global_step=self.step, var_list=self.G_inv_var )
+                    #self.reg_optim = g_optimizer.minimize(self.reg_loss, global_step=self.step,var_list=self.G_inv_var )
 
-        d_optim = d_optimizer.minimize(self.d_loss, var_list=D_var_forw + D_var_back)
+                    g_optim = g_optimizer.compute_gradients( g_loss_forw + self.config.lambda_s *(self.s_loss), var_list=self.G_var )
 
-        self.balance = balance #self.gamma * self.d_loss_real - self.g_loss
-        #self.measure = self.d_loss_real + tf.abs(self.balance)
+                    g_inv_optim = g_inv_optimizer.compute_gradients(g_loss_back + self.config.lambda_d*sd_loss_forw + self.config.lambda_s *(self.s_loss), var_list=self.G_inv_var )
 
-        with tf.control_dependencies([d_optim, g_optim, g_inv_optim]):
-            self.k_update = tf.assign(
-                self.k_t, tf.clip_by_value(self.k_t + self.lambda_k * (balance), 0, 1))
-            self.k_update2 = tf.assign(
-                self.k_t2, tf.clip_by_value(self.k_t2 + self.lambda_k * (balance2), 0, 1))
-            self.k_update3 = tf.assign(
-                self.k_t3, tf.clip_by_value(self.k_t3 + self.lambda_k * (balance3), 0, 1))
-            self.k_update4 = tf.assign(
-                self.k_t4, tf.clip_by_value(self.k_t4 + self.lambda_k * (balance4), 0, 1))
+                    d_optim = d_optimizer.compute_gradients(self.d_loss, var_list=D_var_forw + D_var_back)
 
+                    tower_grads_G.append(g_optim)
+                    tower_grads_G_inv.append(g_inv_optim)
+                    tower_grads_D.append(d_optim)
 
-        #kernel = G_conv_var[0]  #
-        #x_min = tf.reduce_min(kernel)
-        #x_max = tf.reduce_max(kernel)
-        #kernel_0_to_1 = (kernel - x_min) / (x_max - x_min)
-        #kernel_transposed = tf.transpose(kernel_0_to_1, [3, 0, 1, 2])
-        self.summary_op = tf.summary.merge([
-            tf.summary.image("Real Images", self.real_image),
-            tf.summary.image("Generated Images", self.x),
-            #tf.summary.image("Intended Rendering", denorm_img(ren_p)),
-            tf.summary.image("Generated Rendering", denorm_img(y)),
-            #tf.summary.image("Regressor Input", self.image_3dmm),
-            #tf.summary.image("Regressor Output", denorm_img(ren_reg)),
-            #tf.summary.image("Regressor GT", self.annot_3dmm),
-            #tf.summary.image("Regressor Input-Test", self.image_3dmm_test),
-            #tf.summary.image("Regressor Output-Test", denorm_img(ren_reg_test)),
-            #tf.summary.image("Regressor GT-Test", self.annot_3dmm_test),
-            #tf.summary.image("Rendering Output", denorm_img(ren_syn)),
-            tf.summary.image("Rendering GT", self.syn_image),
-            #tf.summary.image("filters", kernel_transposed),
-            tf.summary.image("AE_x", self.AE_x),
-            tf.summary.image("AE_u", self.AE_u),
+                    self.balance = balance #self.gamma * self.d_loss_real - self.g_loss
+                    #self.measure = self.d_loss_real + tf.abs(self.balance)
+                    reuse_vars = True
 
-            tf.summary.scalar("loss/d_loss", self.d_loss),
-            tf.summary.scalar("loss/s_loss", self.s_loss),
-            tf.summary.scalar("loss/p_loss", self.p_loss),
-            tf.summary.scalar("loss/g_loss", self.g_loss),
-            tf.summary.scalar("loss/g_loss_back", g_loss_back),
-            tf.summary.scalar("loss/sd_loss_back", sd_loss_back),
-            #tf.summary.scalar("loss/ren_loss", self.ren_loss),
-            #tf.summary.scalar("loss/reg_loss", self.reg_loss),
-            #tf.summary.scalar("loss/reg_test_loss", self.reg_test_loss),
-            #tf.summary.scalar("loss/reg_latent_loss", self.reg_latent_loss),
-            #tf.summary.scalar("loss/d_loss_real", self.d_loss_real),
-            #tf.summary.scalar("loss/d_loss_fake", self.d_loss_fake),
-            #tf.summary.scalar("misc/measure", self.measure),
-            tf.summary.scalar("misc/k_t", self.k_t),
-            tf.summary.scalar("misc/k_t2", self.k_t2),
-            tf.summary.scalar("misc/d_lr", self.d_lr),
-            tf.summary.scalar("misc/g_lr", self.g_lr),
-            tf.summary.scalar("misc/balance", self.balance),
-        ])
+                    #kernel = G_conv_var[0]  #
+                    #x_min = tf.reduce_min(kernel)
+                    #x_max = tf.reduce_max(kernel)
+                    #kernel_0_to_1 = (kernel - x_min) / (x_max - x_min)
+                    #kernel_transposed = tf.transpose(kernel_0_to_1, [3, 0, 1, 2])
+                    if i == self.config.num_gpu-1:
+                        self.summary_op = tf.summary.merge([
+                            tf.summary.image("Real Images", self.real_image),
+                            tf.summary.image("Generated Images", self.x),
+                            #tf.summary.image("Intended Rendering", denorm_img(ren_p)),
+                            tf.summary.image("Generated Rendering", denorm_img(y)),
+                            #tf.summary.image("Regressor Input", self.image_3dmm),
+                            #tf.summary.image("Regressor Output", denorm_img(ren_reg)),
+                            #tf.summary.image("Regressor GT", self.annot_3dmm),
+                            #tf.summary.image("Regressor Input-Test", self.image_3dmm_test),
+                            #tf.summary.image("Regressor Output-Test", denorm_img(ren_reg_test)),
+                            #tf.summary.image("Regressor GT-Test", self.annot_3dmm_test),
+                            #tf.summary.image("Rendering Output", denorm_img(ren_syn)),
+                            tf.summary.image("Rendering GT", self.syn_image),
+                            #tf.summary.image("filters", kernel_transposed),
+                            tf.summary.image("AE_x", self.AE_x),
+                            tf.summary.image("AE_u", self.AE_u),
+
+                            tf.summary.scalar("loss/d_loss", self.d_loss),
+                            tf.summary.scalar("loss/s_loss", self.s_loss),
+                            #tf.summary.scalar("loss/p_loss", self.p_loss),
+                            tf.summary.scalar("loss/g_loss", self.g_loss),
+                            tf.summary.scalar("loss/g_loss_back", g_loss_back),
+                            #tf.summary.scalar("loss/sd_loss_back", sd_loss_back),
+                            #tf.summary.scalar("loss/ren_loss", self.ren_loss),
+                            #tf.summary.scalar("loss/reg_loss", self.reg_loss),
+                            #tf.summary.scalar("loss/reg_test_loss", self.reg_test_loss),
+                            #tf.summary.scalar("loss/reg_latent_loss", self.reg_latent_loss),
+                            #tf.summary.scalar("loss/d_loss_real", self.d_loss_real),
+                            #tf.summary.scalar("loss/d_loss_fake", self.d_loss_fake),
+                            #tf.summary.scalar("misc/measure", self.measure),
+                            tf.summary.scalar("misc/k_t", self.k_t),
+                            tf.summary.scalar("misc/k_t2", self.k_t2),
+                            tf.summary.scalar("misc/d_lr", self.d_lr),
+                            tf.summary.scalar("misc/g_lr", self.g_lr),
+                            tf.summary.scalar("misc/balance", self.balance),
+                        ])
+
+            tower_grads_G = average_gradients(tower_grads_G)
+            tower_grads_G_inv = average_gradients(tower_grads_G_inv)
+            tower_grads_D = average_gradients(tower_grads_D)
+            train_op_G = g_optimizer.apply_gradients(tower_grads_G,self.step)
+            train_op_G_inv = g_inv_optimizer.apply_gradients(tower_grads_G_inv)
+            train_op_D = d_optimizer.apply_gradients(tower_grads_D)
+
+            with tf.control_dependencies([train_op_G, train_op_G_inv, train_op_D]):
+                self.k_update = tf.assign(
+                    self.k_t, tf.clip_by_value(self.k_t + self.lambda_k * (balance), 0, 1))
+                self.k_update2 = tf.assign(
+                    self.k_t2, tf.clip_by_value(self.k_t2 + self.lambda_k * (balance2), 0, 1))
+                self.k_update3 = tf.assign(
+                    self.k_t3, tf.clip_by_value(self.k_t3 + self.lambda_k * (balance3), 0, 1))
+                #self.k_update4 = tf.assign(
+                #    self.k_t4, tf.clip_by_value(self.k_t4 + self.lambda_k * (balance4), 0, 1))
 
         return self.G_var#, self.G_inv_var, self.G_var
 
@@ -491,7 +533,7 @@ class Trainer(object):
 
     def generate(self, inputs, alpha_id_fix, root_path=None, path=None, idx=None, save=True):
 
-        x = np.array([self.sess.run(self.x, {self.syn_image: inputs[i:min(i + self.config.batch_size, len(inputs))]}) for i in range(0,len(inputs),self.config.batch_size)])
+        x = np.array([self.sess.run(self.x, {self.syn_image: inputs[i:min(i + self.config.batch_size*self.config.num_gpu, len(inputs))]}) for i in range(0,len(inputs),self.config.batch_size*self.config.num_gpu)])
         x = x.reshape((-1,)+x.shape[2:])
         if path is None and save:
             path = os.path.join(root_path, '{}_G.png'.format(idx))
