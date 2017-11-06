@@ -304,6 +304,9 @@ class Trainer(object):
             tower_grads_G = []
             tower_grads_G_inv = []
             tower_grads_D = []
+            balances1 = []
+            balances2 = []
+            balances3 = []
             reuse_vars = False
 
             optimizer = tf.train.AdamOptimizer
@@ -445,6 +448,9 @@ class Trainer(object):
                     tower_grads_G.append(g_optim)
                     tower_grads_G_inv.append(g_inv_optim)
                     tower_grads_D.append(d_optim)
+                    balances1.append(balance)
+                    balances2.append(balance2)
+                    balances3.append(balance3)
 
                     self.balance = balance #self.gamma * self.d_loss_real - self.g_loss
                     #self.measure = self.d_loss_real + tf.abs(self.balance)
@@ -490,8 +496,9 @@ class Trainer(object):
                             tf.summary.scalar("misc/k_t2", self.k_t2),
                             tf.summary.scalar("misc/d_lr", self.d_lr),
                             tf.summary.scalar("misc/g_lr", self.g_lr),
-                            tf.summary.scalar("misc/balance", self.balance),
+                            tf.summary.scalar("misc/balance", tf.reduce_mean(balances1)),
                         ])
+                    #tf.get_variable_scope().reuse_variables()
 
             tower_grads_G = average_gradients(tower_grads_G)
             tower_grads_G_inv = average_gradients(tower_grads_G_inv)
@@ -502,11 +509,11 @@ class Trainer(object):
 
             with tf.control_dependencies([train_op_G, train_op_G_inv, train_op_D]):
                 self.k_update = tf.assign(
-                    self.k_t, tf.clip_by_value(self.k_t + self.lambda_k * (balance), 0, 1))
+                    self.k_t, tf.clip_by_value(self.k_t + self.lambda_k * tf.reduce_mean(balances1), 0, 1))
                 self.k_update2 = tf.assign(
-                    self.k_t2, tf.clip_by_value(self.k_t2 + self.lambda_k * (balance2), 0, 1))
+                    self.k_t2, tf.clip_by_value(self.k_t2 + self.lambda_k * tf.reduce_mean(balances2), 0, 1))
                 self.k_update3 = tf.assign(
-                    self.k_t3, tf.clip_by_value(self.k_t3 + self.lambda_k * (balance3), 0, 1))
+                    self.k_t3, tf.clip_by_value(self.k_t3 + self.lambda_k * tf.reduce_mean(balances3), 0, 1))
                 #self.k_update4 = tf.assign(
                 #    self.k_t4, tf.clip_by_value(self.k_t4 + self.lambda_k * (balance4), 0, 1))
 
