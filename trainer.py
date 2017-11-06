@@ -118,9 +118,9 @@ class Trainer(object):
 
         self.start_step = 0
         self.log_step = config.log_step
-        self.max_step = config.max_step / config.num_gpu
+        self.max_step = int(config.max_step / config.num_gpu)
         self.save_step = config.save_step
-        self.lr_update_step = config.lr_update_step / config.num_gpu
+        self.lr_update_step = int(config.lr_update_step / config.num_gpu)
 
         self.is_train = config.is_train
         self.gen_var = self.build_model()
