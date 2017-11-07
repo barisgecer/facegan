@@ -3,7 +3,7 @@ import ops
 import utils
 
 class Generator:
-  def __init__(self, name, is_training, ngf=64, norm='instance', image_size=128,reuse=False):
+  def __init__(self, name, is_training, ngf=64, norm='instance', image_size=128,reuse=False, drop_keep = 1.0):
     self.name = name
     self.reuse = reuse
     self.ngf = ngf
@@ -29,13 +29,13 @@ class Generator:
 
       if self.image_size <= 64:
         # use 3 residual blocks for 64x64 images
-        res_output = ops.n_res_blocks(d128, reuse=self.reuse, n=3)      # (?, w/4, h/4, 128)
+        res_output = ops.n_res_blocks(d128, reuse=self.reuse, n=3, drop_keep)      # (?, w/4, h/4, 128)
       elif self.image_size <= 128:
         # use 6 residual blocks for 128x128 images
-        res_output = ops.n_res_blocks(d128, reuse=self.reuse, n=6)      # (?, w/4, h/4, 128)
+        res_output = ops.n_res_blocks(d128, reuse=self.reuse, n=6, drop_keep)      # (?, w/4, h/4, 128)
       else:
         # 9 blocks for higher resolution
-        res_output = ops.n_res_blocks(d128, reuse=self.reuse, n=9)      # (?, w/4, h/4, 128)
+        res_output = ops.n_res_blocks(d128, reuse=self.reuse, n=9, drop_keep)      # (?, w/4, h/4, 128)
 
       # fractional-strided convolution
       u64 = ops.uk(res_output, 2*self.ngf, is_training=self.is_training, norm=self.norm,

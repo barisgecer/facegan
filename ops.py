@@ -87,10 +87,11 @@ def Rk(input, k,  reuse=False, norm='instance', is_training=True, name=None):
     output = input+normalized2
     return output
 
-def n_res_blocks(input, reuse, norm='instance', is_training=True, n=6):
+def n_res_blocks(input, reuse, norm='instance', is_training=True, n=6, drop_keep=1.0):
   depth = input.get_shape()[3]
   for i in range(1,n+1):
     output = Rk(input, depth, reuse, norm, is_training, 'R{}_{}'.format(depth, i))
+    output = tf.nn.dropout(output, drop_keep)
     input = output
   return output
 
