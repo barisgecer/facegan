@@ -91,9 +91,9 @@ class Trainer(object):
         self.reg_lr = tf.Variable(config.reg_lr, name='reg_lr')
         self.lambda_c = tf.Variable(config.lambda_c, name='lambda_c')
 
-        self.g_lr_warmup = tf.assign(self.g_lr, tf.minimum(self.g_lr * (1+ (config.num_gpu-1) * (config.log_step/config.warm_up)), config.g_lr * config.num_gpu),
+        self.g_lr_warmup = tf.assign(self.g_lr, tf.minimum(config.g_lr * (1+ (config.num_gpu-1) * (config.log_step/config.warm_up)), config.g_lr * config.num_gpu),
                                      name='g_lr_update')
-        self.d_lr_warmup = tf.assign(self.d_lr, tf.minimum(self.d_lr * (1+ (config.num_gpu-1) * (config.log_step/config.warm_up)), config.d_lr * config.num_gpu),
+        self.d_lr_warmup = tf.assign(self.d_lr, tf.minimum(config.d_lr * (1+ (config.num_gpu-1) * (config.log_step/config.warm_up)), config.d_lr * config.num_gpu),
                                      name='d_lr_update')
 
         self.g_lr_update = tf.assign(self.g_lr, tf.maximum(self.g_lr * 0.5, config.lr_lower_boundary),
@@ -331,6 +331,8 @@ class Trainer(object):
             optimizer = tf.train.AdamOptimizer
             g_optimizer, g_inv_optimizer, d_optimizer = optimizer(self.g_lr), optimizer(self.g_lr), optimizer(self.d_lr)
 
+            self.x_hist = tf.placeholder(tf.float32, [self.config.batch_size,self.input_scale_size,self.input_scale_size,3], 'x_hist')
+
             for i in range(self.config.num_gpu):
                 gpu_ind = slice(i * self.config.batch_size, (i + 1) * self.config.batch_size)
                 with tf.device('/gpu:%d' % i):
@@ -403,7 +405,7 @@ class Trainer(object):
                     # C_input = tf.map_fn(lambda frame: tf.image.per_image_standardization(frame), C_input)
                     C = ModuleC(self.config)
                     self.c_loss, self.C_var, self.C_logits_var = \
-                        C.getNetwork(image=C_input, label_batch=self.syn_label, nrof_classes=self.n_id)
+                        C.getNetwork(image=C_input, label_batch=self.syn_label[gpu_ind], nrof_classes=self.n_id,reuse=reuse_vars)
 
                     # Rendering
                     #ren_syn = R(self.syn_latent)
@@ -454,7 +456,6 @@ class Trainer(object):
                     #self.reg_loss = tf.reduce_mean(tf.abs(ren_reg - norm_img(self.annot_3dmm)))
                     #self.reg_test_loss = tf.reduce_mean(tf.abs(ren_reg_test - norm_img(self.annot_3dmm_test)))
                     #self.reg_latent_loss = tf.reduce_mean(tf.abs(reg_latent - tf.split(self.latent_3dmm, [451, 61],1)[0]))
-                    self.x_hist = tf.placeholder(tf.float32, [None, None, None, 3], 'x_hist')
                     d_loss_forw, g_loss_forw, balance, D_var_forw, self.AE_x, self.AE_u = D("D_forw",tf.concat([x, self.x_hist],0), real_image_norm, self.k_t, two_x=True)
                     d_loss_back, g_loss_back, balance2, D_var_back, _, _ = D("D_back",tf.concat([y, y_],0), syn_image, self.k_t2, two_x=True)
                     self.g_loss = g_loss_forw + g_loss_back
@@ -550,7 +551,7 @@ class Trainer(object):
                 #self.k_update4 = tf.assign(
                 #    self.k_t4, tf.clip_by_value(self.k_t4 + self.lambda_k * (balance4), 0, 1))
 
-        return self.G_var#, self.G_inv_var, self.G_var
+        return self.G_var, self.C_var#, self.G_inv_var, self.G_var
 
     def build_test_model(self):
         a=2

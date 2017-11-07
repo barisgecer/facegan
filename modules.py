@@ -13,16 +13,15 @@ class ModuleC(object):
         self.network = importlib.import_module('facenet.src.'+config.model_def)
 
 
-    def getNetwork(self,image, nrof_classes, label_batch):
+    def getNetwork(self,image, nrof_classes, label_batch, reuse= False):
         # Build the inference graph
-        prelogits, _ = self.network.inference(image, self.config.keep_probability, phase_train = False, bottleneck_layer_size=self.config.embedding_size,
-                                         weight_decay=self.config.weight_decay)
+        prelogits, _ = self.network.inference(image, self.config.keep_probability, phase_train = False, bottleneck_layer_size=self.config.embedding_size, weight_decay=self.config.weight_decay, reuse=reuse)
         logits = slim.fully_connected(prelogits, nrof_classes, activation_fn=None,
                                       weights_initializer=tf.truncated_normal_initializer(stddev=0.1),
                                       weights_regularizer=slim.l2_regularizer(self.config.weight_decay),
-                                      scope='Logits', reuse=False)
+                                      scope='Logits', reuse=reuse)
 
-        embeddings = tf.nn.l2_normalize(prelogits, 1, 1e-10, name='embeddings')
+        #embeddings = tf.nn.l2_normalize(prelogits, 1, 1e-10, name='embeddings')
 
         # Calculate the average cross entropy loss across the batch
         cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
