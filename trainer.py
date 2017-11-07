@@ -89,9 +89,9 @@ class Trainer(object):
         self.ren_lr = tf.Variable(config.ren_lr, name='ren_lr')
         self.reg_lr = tf.Variable(config.reg_lr, name='reg_lr')
 
-        self.g_lr_warmup = tf.assign(self.g_lr, tf.maximum(self.g_lr * (1+ (config.num_gpu-1) * (config.log_step/config.warm_up)), config.g_lr * config.num_gpu),
+        self.g_lr_warmup = tf.assign(self.g_lr, tf.minimum(self.g_lr * (1+ (config.num_gpu-1) * (config.log_step/config.warm_up)), config.g_lr * config.num_gpu),
                                      name='g_lr_update')
-        self.d_lr_warmup = tf.assign(self.d_lr, tf.maximum(self.d_lr * (1+ (config.num_gpu-1) * (config.log_step/config.warm_up)), config.d_lr * config.num_gpu),
+        self.d_lr_warmup = tf.assign(self.d_lr, tf.minimum(self.d_lr * (1+ (config.num_gpu-1) * (config.log_step/config.warm_up)), config.d_lr * config.num_gpu),
                                      name='d_lr_update')
 
         self.g_lr_update = tf.assign(self.g_lr, tf.maximum(self.g_lr * 0.5, config.lr_lower_boundary),
