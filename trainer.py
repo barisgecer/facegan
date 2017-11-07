@@ -18,6 +18,7 @@ import cv2
 import pickle
 import os.path
 from PIL import Image
+from buffer import Buffer
 
 #denemes
 def next(loader):
@@ -141,6 +142,9 @@ class Trainer(object):
                     pre_train_saver.restore(sess, config.pretrained_gen)
 
             self.load_pretrain = load_pretrain
+        self.rng = np.random.RandomState(config.random_seed)
+        self.history_buffer = Buffer(config, self.rng)
+
 
     def prepare_session(self, var_saved):
         self.saver = tf.train.Saver(var_saved)
@@ -225,6 +229,7 @@ class Trainer(object):
         for step in trange(self.start_step, self.max_step):
             fetch_dict = {
                 "k_update": self.k_update,
+                "output": self.x_all,
                 #"measure": self.measure,
             }
             if step % self.log_step == 0:
@@ -234,8 +239,9 @@ class Trainer(object):
                     "d_loss": self.d_loss,
                     "k_t": self.k_t,
                 })
-            result = self.sess.run(fetch_dict)
+            result = self.sess.run(fetch_dict,{self.x_hist: self.history_buffer.sample()})
 
+            self.history_buffer.push(result['output'])
             #measure = result['measure']
             #measure_history.append(measure)
 
@@ -438,7 +444,8 @@ class Trainer(object):
                     #self.reg_loss = tf.reduce_mean(tf.abs(ren_reg - norm_img(self.annot_3dmm)))
                     #self.reg_test_loss = tf.reduce_mean(tf.abs(ren_reg_test - norm_img(self.annot_3dmm_test)))
                     #self.reg_latent_loss = tf.reduce_mean(tf.abs(reg_latent - tf.split(self.latent_3dmm, [451, 61],1)[0]))
-                    d_loss_forw, g_loss_forw, balance, D_var_forw, self.AE_x, self.AE_u = D("D_forw",x, real_image_norm, self.k_t)
+                    self.x_hist = tf.placeholder(tf.float32, [None, None, None, 3], 'x_hist')
+                    d_loss_forw, g_loss_forw, balance, D_var_forw, self.AE_x, self.AE_u = D("D_forw",tf.concat([x[0:int(self.config.batch_size/2)], self.x_hist],0), real_image_norm, self.k_t)
                     d_loss_back, g_loss_back, balance2, D_var_back, _, _ = D("D_back",tf.concat([y, y_],0), syn_image, self.k_t2, two_x=True)
                     self.g_loss = g_loss_forw + g_loss_back
                     self.d_loss = d_loss_forw + d_loss_back
