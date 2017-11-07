@@ -89,6 +89,7 @@ class Trainer(object):
         self.d_lr = tf.Variable(config.d_lr, name='d_lr')
         self.ren_lr = tf.Variable(config.ren_lr, name='ren_lr')
         self.reg_lr = tf.Variable(config.reg_lr, name='reg_lr')
+        self.lambda_c = tf.Variable(config.lambda_c, name='lambda_c')
 
         self.g_lr_warmup = tf.assign(self.g_lr, tf.minimum(self.g_lr * (1+ (config.num_gpu-1) * (config.log_step/config.warm_up)), config.g_lr * config.num_gpu),
                                      name='g_lr_update')
@@ -103,6 +104,7 @@ class Trainer(object):
                                      name='ren_lr_update')
         self.reg_lr_update = tf.assign(self.reg_lr, tf.maximum(self.reg_lr * 0.5, config.lr_lower_boundary),
                                      name='reg_lr_update')
+        self.lambda_c_update = tf.assign(self.lambda_c, self.lambda_c * 10, name='lambda_c_update')
         self.n_id = config.n_id
 
         self.gamma = config.gamma
@@ -129,19 +131,21 @@ class Trainer(object):
         self.lr_update_step = int(config.lr_update_step / config.num_gpu)
 
         self.is_train = config.is_train
-        self.gen_var = self.build_model()
+        self.gen_var, c_var = self.build_model()
 
         self.summary_writer = tf.summary.FileWriter(self.model_dir)
 
         self.load_pretrain = None
+        c_loader = tf.train.Saver(c_var)
         if not config.train_generator:
             pre_train_saver = tf.train.Saver(self.gen_var)
 
-            def load_pretrain(sess):
-                if not config.train_generator:
-                    pre_train_saver.restore(sess, config.pretrained_gen)
+        def load_pretrain(sess):
+            if not config.train_generator:
+                pre_train_saver.restore(sess, config.pretrained_gen)
+            c_loader.restore(sess, self.config.pretrained_rec)
 
-            self.load_pretrain = load_pretrain
+        self.load_pretrain = load_pretrain
         self.rng = np.random.RandomState(config.random_seed)
         self.history_buffer = Buffer(config, self.rng)
 
@@ -263,7 +267,7 @@ class Trainer(object):
                 # self.autoencode(x_fixed, self.model_dir, idx=step, x_fake=x_fake)
 
             if step % self.lr_update_step == self.lr_update_step - 1:
-                self.sess.run([self.g_lr_update, self.d_lr_update])
+                self.sess.run([self.g_lr_update, self.d_lr_update, self.lambda_c_update])
                 self.lr_update_step = int(self.lr_update_step/2)
                 # cur_measure = np.mean(measure_history)
                 # if cur_measure > prev_measure * 0.99:
@@ -395,6 +399,12 @@ class Trainer(object):
                     self.x = denorm_img(x)
                     self.x_all.append(x)
 
+                    C_input = tf.image.resize_bilinear(x, [160, 160])
+                    # C_input = tf.map_fn(lambda frame: tf.image.per_image_standardization(frame), C_input)
+                    C = ModuleC(self.config)
+                    self.c_loss, self.C_var, self.C_logits_var = \
+                        C.getNetwork(image=C_input, label_batch=self.syn_label, nrof_classes=self.n_id)
+
                     # Rendering
                     #ren_syn = R(self.syn_latent)
                     #ren_p = R(self.syn_latent)
@@ -456,7 +466,7 @@ class Trainer(object):
 
                     #self.reg_optim = g_optimizer.minimize(self.reg_loss, global_step=self.step,var_list=self.G_inv_var )
 
-                    g_optim = g_optimizer.compute_gradients( g_loss_forw + self.config.lambda_s *(self.s_loss), var_list=self.G_var )
+                    g_optim = g_optimizer.compute_gradients( g_loss_forw + self.config.lambda_c*self.c_loss + self.config.lambda_s *(self.s_loss), var_list=self.G_var+self.C_logits_var)
 
                     g_inv_optim = g_inv_optimizer.compute_gradients(g_loss_back + self.config.lambda_d*sd_loss_forw + self.config.lambda_s *(self.s_loss), var_list=self.G_inv_var )
 
@@ -501,6 +511,7 @@ class Trainer(object):
                             #tf.summary.scalar("loss/p_loss", self.p_loss),
                             tf.summary.scalar("loss/g_loss", self.g_loss),
                             tf.summary.scalar("loss/g_loss_back", g_loss_back),
+                            tf.summary.scalar("loss/c_loss", self.c_loss),
                             #tf.summary.scalar("loss/sd_loss_back", sd_loss_back),
                             #tf.summary.scalar("loss/ren_loss", self.ren_loss),
                             #tf.summary.scalar("loss/reg_loss", self.reg_loss),

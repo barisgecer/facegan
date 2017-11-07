@@ -41,7 +41,7 @@ def get_loader(root, batch_size, scale_size, data_format, split=None, is_graysca
         min_after_dequeue=min_after_dequeue, name='real_inputs')
 
     #queue = tf.image.crop_to_bounding_box(queue, 100, 50, 78, 78)
-    queue = tf.image.resize_bilinear(queue, [scale_size, scale_size])
+    #queue = tf.image.resize_bilinear(queue, [scale_size, scale_size])
 
     if data_format == 'NCHW':
         queue = tf.transpose(queue, [0, 3, 1, 2])
@@ -123,7 +123,7 @@ def get_syn_loader(root, batch_size, scale_size, data_format, split=None, is_gra
         min_after_dequeue=min_after_dequeue, name='synthetic_inputs',seed=seed)
 
     #queue_image = tf.image.crop_to_bounding_box(queue_image, 34, 34, 64, 64)
-    queue_image = tf.image.resize_bilinear(queue_image, [scale_size, scale_size])
+    #queue_image = tf.image.resize_bilinear(queue_image, [scale_size, scale_size])
 
     if data_format == 'NCHW':
         queue_image = tf.transpose(queue_image, [0, 3, 1, 2])
@@ -198,7 +198,7 @@ def get_3dmm_loader(root, batch_size, scale_size, data_format, split=None, is_gr
         min_after_dequeue=min_after_dequeue, name='real_3dmm_inputs')
 
     #queue_image = tf.image.crop_to_bounding_box(queue_image, 34, 34, 64, 64)
-    queue_image = tf.image.resize_bilinear(queue_image, [scale_size, scale_size])
+    #queue_image = tf.image.resize_bilinear(queue_image, [scale_size, scale_size])
 
     if data_format == 'NCHW':
         queue_image = tf.transpose(queue_image, [0, 3, 1, 2])

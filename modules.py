@@ -15,7 +15,7 @@ class ModuleC(object):
 
     def getNetwork(self,image, nrof_classes, label_batch):
         # Build the inference graph
-        prelogits, _ = self.network.inference(image, self.config.keep_probability, bottleneck_layer_size=self.config.embedding_size,
+        prelogits, _ = self.network.inference(image, self.config.keep_probability, phase_train = False, bottleneck_layer_size=self.config.embedding_size,
                                          weight_decay=self.config.weight_decay)
         logits = slim.fully_connected(prelogits, nrof_classes, activation_fn=None,
                                       weights_initializer=tf.truncated_normal_initializer(stddev=0.1),
