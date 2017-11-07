@@ -307,6 +307,7 @@ class Trainer(object):
             balances1 = []
             balances2 = []
             balances3 = []
+            self.x_all = []
             reuse_vars = False
 
             optimizer = tf.train.AdamOptimizer
@@ -378,6 +379,7 @@ class Trainer(object):
                     x, x_, paired_x = tf.split(G(tf.concat([syn_image,y_,norm_img(self.annot_3dmm[gpu_ind])],0)),3)
                     y, paired_y = tf.split(G_inv(tf.concat([x,norm_img(self.image_3dmm[gpu_ind])],0)),2)
                     self.x = denorm_img(x)
+                    self.x_all.append(self.x)
 
                     # Rendering
                     #ren_syn = R(self.syn_latent)
@@ -463,7 +465,7 @@ class Trainer(object):
                     #kernel_transposed = tf.transpose(kernel_0_to_1, [3, 0, 1, 2])
                     if i == self.config.num_gpu-1:
                         self.summary_op = tf.summary.merge([
-                            tf.summary.image("Real Images", self.real_image),
+                            tf.summary.image("Real Images", self.real_image[gpu_ind]),
                             tf.summary.image("Generated Images", self.x),
                             #tf.summary.image("Intended Rendering", denorm_img(ren_p)),
                             tf.summary.image("Generated Rendering", denorm_img(y)),
@@ -474,7 +476,7 @@ class Trainer(object):
                             #tf.summary.image("Regressor Output-Test", denorm_img(ren_reg_test)),
                             #tf.summary.image("Regressor GT-Test", self.annot_3dmm_test),
                             #tf.summary.image("Rendering Output", denorm_img(ren_syn)),
-                            tf.summary.image("Rendering GT", self.syn_image),
+                            tf.summary.image("Rendering GT", self.syn_image[gpu_ind]),
                             #tf.summary.image("filters", kernel_transposed),
                             tf.summary.image("AE_x", self.AE_x),
                             tf.summary.image("AE_u", self.AE_u),
@@ -507,7 +509,11 @@ class Trainer(object):
             train_op_G_inv = g_inv_optimizer.apply_gradients(tower_grads_G_inv)
             train_op_D = d_optimizer.apply_gradients(tower_grads_D)
 
-            with tf.control_dependencies([train_op_G, train_op_G_inv, train_op_D]):
+            variable_averages = tf.train.ExponentialMovingAverage(0.9999, self.step)
+            variables_averages_op = variable_averages.apply(tf.trainable_variables())
+            self.x_all = tf.concat(self.x_all,0)
+
+            with tf.control_dependencies([train_op_G, train_op_G_inv, train_op_D, variables_averages_op]):
                 self.k_update = tf.assign(
                     self.k_t, tf.clip_by_value(self.k_t + self.lambda_k * tf.reduce_mean(balances1), 0, 1))
                 self.k_update2 = tf.assign(
@@ -539,14 +545,14 @@ class Trainer(object):
         # self.sess.run(tf.variables_initializer(test_variables))
 
     def generate(self, inputs, alpha_id_fix, root_path=None, path=None, idx=None, save=True):
-
-        x = np.array([self.sess.run(self.x, {self.syn_image: inputs[i:min(i + self.config.batch_size*self.config.num_gpu, len(inputs))]}) for i in range(0,len(inputs),self.config.batch_size*self.config.num_gpu)])
-        x = x.reshape((-1,)+x.shape[2:])
-        if path is None and save:
-            path = os.path.join(root_path, '{}_G.png'.format(idx))
-            save_image(x, path,nrow=self.n_im_per_id)
-            print("[*] Samples saved: {}".format(path))
-        return x
+        with tf.device('/gpu:0'):
+            x = np.array([self.sess.run(self.x_all, {self.syn_image: inputs[i:min(i + self.config.batch_size*self.config.num_gpu, len(inputs))]}) for i in range(0,len(inputs),self.config.batch_size*self.config.num_gpu)])
+            x = x.reshape((-1,)+x.shape[2:])
+            if path is None and save:
+                path = os.path.join(root_path, '{}_G.png'.format(idx))
+                save_image(x, path,nrow=self.n_im_per_id)
+                print("[*] Samples saved: {}".format(path))
+            return x
 
     def autoencode(self, inputs, path, idx=None, x_fake=None):
         items = {
