@@ -84,10 +84,15 @@ class Trainer(object):
 
         self.step = tf.Variable(0, name='step', trainable=False)
 
-        self.g_lr = tf.Variable(config.g_lr * config.num_gpu, name='g_lr')
-        self.d_lr = tf.Variable(config.d_lr * config.num_gpu, name='d_lr')
+        self.g_lr = tf.Variable(config.g_lr, name='g_lr')
+        self.d_lr = tf.Variable(config.d_lr, name='d_lr')
         self.ren_lr = tf.Variable(config.ren_lr, name='ren_lr')
         self.reg_lr = tf.Variable(config.reg_lr, name='reg_lr')
+
+        self.g_lr_warmup = tf.assign(self.g_lr, tf.maximum(self.g_lr * (1+ (config.num_gpu-1) * (config.log_step/config.warm_up)), config.g_lr * config.num_gpu),
+                                     name='g_lr_update')
+        self.d_lr_warmup = tf.assign(self.d_lr, tf.maximum(self.d_lr * (1+ (config.num_gpu-1) * (config.log_step/config.warm_up)), config.d_lr * config.num_gpu),
+                                     name='d_lr_update')
 
         self.g_lr_update = tf.assign(self.g_lr, tf.maximum(self.g_lr * 0.5, config.lr_lower_boundary),
                                      name='g_lr_update')
@@ -244,6 +249,8 @@ class Trainer(object):
 
                 print("[{}/{}] Loss_D: {:.6f} Loss_G: {:.6f} , k_t: {:.4f}". \
                       format(step, self.max_step, d_loss, g_loss, k_t))
+                if step <= self.config.warm_up:
+                    self.sess.run([self.g_lr_warmup, self.d_lr_warmup])
 
             if step % (self.log_step * self.save_step) == 0:
                 x_fake = self.generate(fixed_image, fixed_label, self.model_dir, idx=step)
@@ -251,6 +258,7 @@ class Trainer(object):
 
             if step % self.lr_update_step == self.lr_update_step - 1:
                 self.sess.run([self.g_lr_update, self.d_lr_update])
+                self.lr_update_step = int(self.lr_update_step/2)
                 # cur_measure = np.mean(measure_history)
                 # if cur_measure > prev_measure * 0.99:
                 # prev_measure = cur_measure
