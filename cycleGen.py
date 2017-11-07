@@ -10,6 +10,7 @@ class Generator:
     self.norm = norm
     self.is_training = is_training
     self.image_size = image_size
+    self.drop_keep = drop_keep
 
   def __call__(self, input):
     """
@@ -29,13 +30,13 @@ class Generator:
 
       if self.image_size <= 64:
         # use 3 residual blocks for 64x64 images
-        res_output = ops.n_res_blocks(d128, reuse=self.reuse, n=3, drop_keep)      # (?, w/4, h/4, 128)
+        res_output = ops.n_res_blocks(d128, reuse=self.reuse, n=3, drop_keep=self.drop_keep)      # (?, w/4, h/4, 128)
       elif self.image_size <= 128:
         # use 6 residual blocks for 128x128 images
-        res_output = ops.n_res_blocks(d128, reuse=self.reuse, n=6, drop_keep)      # (?, w/4, h/4, 128)
+        res_output = ops.n_res_blocks(d128, reuse=self.reuse, n=6, drop_keep=self.drop_keep)      # (?, w/4, h/4, 128)
       else:
         # 9 blocks for higher resolution
-        res_output = ops.n_res_blocks(d128, reuse=self.reuse, n=9, drop_keep)      # (?, w/4, h/4, 128)
+        res_output = ops.n_res_blocks(d128, reuse=self.reuse, n=9, drop_keep=self.drop_keep)      # (?, w/4, h/4, 128)
 
       # fractional-strided convolution
       u64 = ops.uk(res_output, 2*self.ngf, is_training=self.is_training, norm=self.norm,
