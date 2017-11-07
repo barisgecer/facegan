@@ -229,7 +229,7 @@ class Trainer(object):
         for step in trange(self.start_step, self.max_step):
             fetch_dict = {
                 "k_update": self.k_update,
-                "output": self.x_all,
+                "output": self.x_all_norm,
                 #"measure": self.measure,
             }
             if step % self.log_step == 0:
@@ -393,7 +393,7 @@ class Trainer(object):
                     x, x_, paired_x = tf.split(G(tf.concat([syn_image,y_,norm_img(self.annot_3dmm[gpu_ind])],0)),3)
                     y, paired_y = tf.split(G_inv(tf.concat([x,norm_img(self.image_3dmm[gpu_ind])],0)),2)
                     self.x = denorm_img(x)
-                    self.x_all.append(self.x)
+                    self.x_all.append(x)
 
                     # Rendering
                     #ren_syn = R(self.syn_latent)
@@ -526,7 +526,8 @@ class Trainer(object):
 
             #variable_averages = tf.train.ExponentialMovingAverage(0.9999, self.step)
             #variables_averages_op = variable_averages.apply(tf.trainable_variables())
-            self.x_all = tf.concat(self.x_all,0)
+            self.x_all_norm = tf.concat(self.x_all,0)
+            self.x_all = denorm_img(self.x_all_norm)
 
             with tf.control_dependencies([train_op_G, train_op_G_inv, train_op_D]):
                 self.k_update = tf.assign(
