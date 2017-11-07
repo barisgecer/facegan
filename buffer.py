@@ -28,9 +28,9 @@ class Buffer(object):
   def sample(self, n=None):
     #assert self.idx > n, "not enough data is pushed"
     if n is None:
-      n = int( self.batch_size/2,)
+      n = self.batch_size
     if n < self.idx:
       random_idx = self.rng.choice(self.idx, n)
       return self.data[random_idx]
     else:
-      return np.random.rand(int( self.batch_size/2), self.image_dims[0], self.image_dims[1], self.image_dims[2])
+      return np.random.rand(n, self.image_dims[0], self.image_dims[1], self.image_dims[2])
