@@ -517,11 +517,11 @@ class Trainer(object):
             train_op_G_inv = g_inv_optimizer.apply_gradients(tower_grads_G_inv)
             train_op_D = d_optimizer.apply_gradients(tower_grads_D)
 
-            #variable_averages = tf.train.ExponentialMovingAverage(0.9999, self.step)
-            #variables_averages_op = variable_averages.apply(tf.trainable_variables())
+            variable_averages = tf.train.ExponentialMovingAverage(0.9999, self.step)
+            variables_averages_op = variable_averages.apply(tf.trainable_variables())
             self.x_all = tf.concat(self.x_all,0)
 
-            with tf.control_dependencies([train_op_G, train_op_G_inv, train_op_D]):
+            with tf.control_dependencies([train_op_G, train_op_G_inv, train_op_D,variables_averages_op]):
                 self.k_update = tf.assign(
                     self.k_t, tf.clip_by_value(self.k_t + self.lambda_k * tf.reduce_mean(balances1), 0, 1))
                 self.k_update2 = tf.assign(
