@@ -42,10 +42,10 @@ def to_nchw_numpy(image):
 
 
 def norm_img(image, data_format=None):
-    image = image / 127.5 - 1.
+    image = image / 127.5005 - 1.
     if data_format:
         image = to_nhwc(image, data_format)
-    return image
+    return tf.clip_by_value(image,-1,1)
 
 
 def denorm_img(norm, data_format ='NHWC'):
@@ -62,12 +62,11 @@ def slerp(val, low, high):
 
 
 class Trainer(object):
-    def __init__(self, config, real_image, syn_image, syn_label, syn_latent, image_3dmm, annot_3dmm, latent_3dmm):#, image_3dmm_test, annot_3dmm_test, latent_3dmm_test):
+    def __init__(self, config, real_image, syn_image, syn_label, image_3dmm, annot_3dmm, latent_3dmm):#, image_3dmm_test, annot_3dmm_test, latent_3dmm_test):
         self.config = config
         self.real_image = real_image
         self.syn_image = syn_image
         self.syn_label = syn_label
-        self.syn_latent = syn_latent
         self.image_3dmm = image_3dmm
         self.annot_3dmm = annot_3dmm
         self.latent_3dmm = latent_3dmm
@@ -224,7 +223,7 @@ class Trainer(object):
         # z_fixed = np.random.uniform(-1, 1, size=(self.batch_size, self.z_num))
         # alpha_id_fixed = np.repeat(np.random.randint(self.n_id, size=(int(np.floor(self.batch_size / 4.0)),1)) + 1, 4,0)
 
-        fixed_image, fixed_label, fixed_latent = self.get_fixed_images(self.n_id_exam_id, self.n_im_per_id)
+        fixed_image, fixed_label = self.get_fixed_images(self.n_id_exam_id, self.n_im_per_id)
         save_image(fixed_image, '{}/syn_fixed.png'.format(self.model_dir), nrow=self.n_im_per_id)
 
         prev_measure = 1
@@ -364,7 +363,7 @@ class Trainer(object):
                         reuse = reuse_vars
                         if hasattr(self, 'G_var'):
                             reuse = True
-                        output, self.G_var = Generator('G_inf', True, ngf=self.config.conv_hidden_num_res, norm='instance', image_size=self.input_scale_size,reuse=reuse, drop_keep=0.9)(input)
+                        output, self.G_var = Generator('G_inf', True, ngf=self.config.conv_hidden_num_res, norm='instance', image_size=self.input_scale_size,reuse=reuse, drop_keep=1.0)(input)
                         #AddRealismLayers(input,self.conv_hidden_num,4,self.data_format,reuse=reuse)
                         return output
 
@@ -400,8 +399,8 @@ class Trainer(object):
                     y, paired_y = tf.split(G_inv(tf.concat([x,norm_img(self.image_3dmm[gpu_ind])],0)),2)
                     self.x = denorm_img(x)
                     self.x_all.append(x)
-
-                    C_input = tf.image.resize_bilinear(x, [160, 160])
+                    x_clip = tf.clip_by_value(x,-1,1)
+                    C_input = tf.image.resize_bilinear(x_clip, [160, 160])
                     # C_input = tf.map_fn(lambda frame: tf.image.per_image_standardization(frame), C_input)
                     C = ModuleC(self.config)
                     self.c_loss, self.C_var, self.C_logits_var = \
@@ -456,7 +455,7 @@ class Trainer(object):
                     #self.reg_loss = tf.reduce_mean(tf.abs(ren_reg - norm_img(self.annot_3dmm)))
                     #self.reg_test_loss = tf.reduce_mean(tf.abs(ren_reg_test - norm_img(self.annot_3dmm_test)))
                     #self.reg_latent_loss = tf.reduce_mean(tf.abs(reg_latent - tf.split(self.latent_3dmm, [451, 61],1)[0]))
-                    d_loss_forw, g_loss_forw, balance, D_var_forw, self.AE_x, self.AE_u = D("D_forw",tf.concat([x, self.x_hist],0), real_image_norm, self.k_t, two_x=True)
+                    d_loss_forw, g_loss_forw, balance, D_var_forw, self.AE_x, self.AE_u = D("D_forw",x, real_image_norm, self.k_t, two_x=False)
                     d_loss_back, g_loss_back, balance2, D_var_back, _, _ = D("D_back",tf.concat([y, y_],0), syn_image, self.k_t2, two_x=True)
                     self.g_loss = g_loss_forw + g_loss_back
                     self.d_loss = d_loss_forw + d_loss_back
@@ -467,7 +466,7 @@ class Trainer(object):
 
                     #self.reg_optim = g_optimizer.minimize(self.reg_loss, global_step=self.step,var_list=self.G_inv_var )
 
-                    g_optim = g_optimizer.compute_gradients( g_loss_forw + self.config.lambda_c*self.c_loss + self.config.lambda_s *(self.s_loss), var_list=self.G_var+self.C_logits_var)
+                    g_optim = g_optimizer.compute_gradients( g_loss_forw + self.config.lambda_s *(self.s_loss), var_list=self.G_var)
 
                     g_inv_optim = g_inv_optimizer.compute_gradients(g_loss_back + self.config.lambda_d*sd_loss_forw + self.config.lambda_s *(self.s_loss), var_list=self.G_inv_var )
 
@@ -536,12 +535,12 @@ class Trainer(object):
             train_op_G_inv = g_inv_optimizer.apply_gradients(tower_grads_G_inv)
             train_op_D = d_optimizer.apply_gradients(tower_grads_D)
 
-            variable_averages = tf.train.ExponentialMovingAverage(0.9999, self.step)
-            variables_averages_op = variable_averages.apply(tf.trainable_variables())
+            #variable_averages = tf.train.ExponentialMovingAverage(0.9999, self.step)
+            #variables_averages_op = variable_averages.apply(tf.trainable_variables())
             self.x_all_norm = tf.concat(self.x_all,0)
             self.x_all = denorm_img(self.x_all_norm)
 
-            with tf.control_dependencies([train_op_G, train_op_G_inv, train_op_D,variables_averages_op]):
+            with tf.control_dependencies([train_op_G, train_op_G_inv, train_op_D]):
                 self.k_update = tf.assign(
                     self.k_t, tf.clip_by_value(self.k_t + self.lambda_k * tf.reduce_mean(balances1), 0, 1))
                 self.k_update2 = tf.assign(
@@ -689,10 +688,9 @@ class Trainer(object):
         images = np.array([cv2.imread(self.config.syn_data_dir + "/{:05d}/{:05d}.jpg".format(id + 1, im + 1))[..., ::-1]\
           for id in np.arange(nId) for im in np.arange(nImage)])
         labels = [id+1 for id in np.arange(nId) for im in np.arange(nImage)]
-        latents = [np.concatenate((readfile(self.config.syn_data_dir + "/{:05d}/{:05d}.txt".format(id + 1, im + 1)), np.random.randn(self.z_num)))\
-          for id in np.arange(nId) for im in np.arange(nImage)]
 
-        return images, labels, latents
+
+        return images, labels
 
 
     def get_image_from_loader(self, image_loader, label_loader, nId , nImage):

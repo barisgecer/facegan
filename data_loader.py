@@ -61,8 +61,6 @@ def get_syn_loader(root, batch_size, scale_size, data_format, split=None, is_gra
             paths = pickle.load(fp)
         with open(root +"/labels.txt", "rb") as fp:
             labels = pickle.load(fp)
-        with open(root +"/latentvars.txt", "rb") as fp:
-            latentvars = pickle.load(fp)
     else:
         for ext in ["jpg", "png"]:
             paths = glob("{}/*/*.{}".format(root, ext))
@@ -75,13 +73,6 @@ def get_syn_loader(root, batch_size, scale_size, data_format, split=None, is_gra
                 with open(root +"/labels.txt", "wb") as fp:
                     pickle.dump(labels, fp)
 
-                latentvars = np.zeros((len(paths), 451), dtype=np.float32)
-                for i, latentvar in enumerate([p.replace(ext, 'txt') for p in paths]):
-                    with open(latentvar) as file:
-                        latentvars[i, :] = str.split(file.read(), "\n")[0:-1]
-                with open(root +"/latentvars.txt", "wb") as fp:
-                    pickle.dump(latentvars, fp)
-
                 break
 
     n_id = max(labels)
@@ -92,10 +83,9 @@ def get_syn_loader(root, batch_size, scale_size, data_format, split=None, is_gra
 
     images = tf.convert_to_tensor(list(paths))
     labels = tf.convert_to_tensor(labels)
-    latentvars = tf.convert_to_tensor(latentvars)
 
     # Makes an input queue
-    input_queue = tf.train.slice_input_producer([images, labels, latentvars], shuffle=False, seed=seed)
+    input_queue = tf.train.slice_input_producer([images, labels], shuffle=False, seed=seed)
     #reader = tf.WholeFileReader()
     #filename, data = reader.read(input_queue[0])
     image = tf.image.decode_image(tf.read_file(input_queue[0]), channels=3)
@@ -103,7 +93,6 @@ def get_syn_loader(root, batch_size, scale_size, data_format, split=None, is_gra
     #reader = tf.TextLineReader()
     #_, latentvar = reader.read(input_queue[2])
     #latentvar = tf.cast(tf.string_split(latentvar,"\n"),tf.float32)
-    latentvar = input_queue[2] #tf.read_file(input_queue[2])
 
     #filename_queue = tf.train.string_input_producer(list(paths), shuffle=False, seed=seed)
     #reader = tf.WholeFileReader()
@@ -117,8 +106,8 @@ def get_syn_loader(root, batch_size, scale_size, data_format, split=None, is_gra
     min_after_dequeue = 500
     capacity = min_after_dequeue + 3 * batch_size
 
-    queue_image, queue_label, queue_latentvar = tf.train.shuffle_batch(
-        [image, label, latentvar], batch_size=batch_size,
+    queue_image, queue_label = tf.train.shuffle_batch(
+        [image, label], batch_size=batch_size,
         num_threads=4, capacity=capacity,
         min_after_dequeue=min_after_dequeue, name='synthetic_inputs',seed=seed)
 
@@ -132,7 +121,7 @@ def get_syn_loader(root, batch_size, scale_size, data_format, split=None, is_gra
     else:
         raise Exception("[!] Unkown data_format: {}".format(data_format))
 
-    return tf.to_float(queue_image), queue_label, queue_latentvar, n_id
+    return tf.to_float(queue_image), queue_label, n_id
 
 
 def get_3dmm_loader(root, batch_size, scale_size, data_format, split=None, is_grayscale=False, seed=None):
