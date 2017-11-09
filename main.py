@@ -63,6 +63,8 @@ def main(config):
             trainer.train()
         if config.generate_dataset:
             trainer.generate_dataset()
+        if config.fit_dataset:
+            trainer.fit_dataset()
     else:
         if not config.load_path:
             raise Exception("[!] You should specify `load_path` to load a pretrained model")

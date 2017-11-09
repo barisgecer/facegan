@@ -31,7 +31,7 @@ class ModuleC(object):
 
         # Calculate the total losses
         regularization_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
-        total_loss = tf.add_n([cross_entropy_mean] + regularization_losses, name='total_loss')
+        total_loss = tf.add_n([cross_entropy_mean], name='total_loss')
 
         variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.config.facenet_scope)
         logit_variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Logits')

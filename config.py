@@ -52,11 +52,13 @@ train_arg.add_argument('--cont', type=str, default="",choices=['','ren','reg','g
 #train_arg.add_argument('--pretrain_generator', type=str2bool, default=True) # True if not pretrained (when train_reg is False)
 train_arg.add_argument('--train_generator', type=str2bool, default=True)
 train_arg.add_argument('--generate_dataset', type=str2bool, default=True)
+train_arg.add_argument('--fit_dataset', type=str2bool, default=False)
 
 #train_arg.add_argument('--pretrained_ren', type=str, default='pretrained_models/ren')
 #train_arg.add_argument('--pretrained_reg', type=str, default='pretrained_models/reg')
 train_arg.add_argument('--pretrained_gen', type=str, default='pretrained_models/gen')
 train_arg.add_argument('--save_syn_dataset', type=str, default='generated')
+train_arg.add_argument('--save_fitting', type=str, default='fitting')
 train_arg.add_argument('--pretrained_rec', type=str, default='facenet_model/model-20170511-185253.ckpt-80000', help='Pretrained facenet model')
 
 train_arg.add_argument('--task', type=str, default=get_branch_name(), help='default branch name')
@@ -76,8 +78,8 @@ train_arg.add_argument('--gamma', type=float, default=0.5)
 train_arg.add_argument('--lambda_k', type=float, default=0.001)
 train_arg.add_argument('--use_gpu', type=str2bool, default=True)
 train_arg.add_argument('--lambda_d', type=float, default=0.1, help='')
-train_arg.add_argument('--lambda_s', type=float, default=0.2, help='')
-train_arg.add_argument('--lambda_c', type=float, default=0.00001, help='')
+train_arg.add_argument('--lambda_s', type=float, default=0.1, help='')
+train_arg.add_argument('--lambda_c', type=float, default=0.0, help='')
 
 # Misc
 misc_arg = add_argument_group('Misc')
