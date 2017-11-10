@@ -133,7 +133,7 @@ class Trainer(object):
         self.load_pretrain = None
 
         c_loader = tf.train.Saver(c_var)
-        if not config.train_generator:
+        if (not config.train_generator) | (config.load_path != '') :
             variables_to_restore = variable_averages.variables_to_restore(self.gen_var)
             var_scopes = list(set([x.name.split('/')[0] for x in self.gen_var]))
             filtered_dict = {k: v for (k, v) in variables_to_restore.items() for x in var_scopes if x in k}
@@ -141,13 +141,16 @@ class Trainer(object):
             self.is_train = False
 
         def load_pretrain(sess):
-            if not config.train_generator:
+            if (not config.train_generator) | (config.load_path != '') :
+                if config.load_path != '':
+                    with open(self.model_dir+'/checkpoint') as file:
+                        data = file.readline()
+                    config.pretrained_gen = data.split("\"")[1]
                 pre_train_saver.restore(sess, config.pretrained_gen)
             c_loader.restore(sess, self.config.pretrained_rec)
 
         self.load_pretrain = load_pretrain
         self.rng = np.random.RandomState(config.random_seed)
-        self.history_buffer = Buffer(config, self.rng)
 
 
     def prepare_session(self, var_saved):
@@ -228,9 +231,12 @@ class Trainer(object):
         for i in range(0,len(paths),self.config.batch_size):
             pa = paths[i:min(i + self.config.batch_size, len(paths))]
             inputs = np.array([cv2.imread(pa[j])[..., ::-1] for j in np.arange(len(pa))])
-            result = self.sess.run([self.x,self.score], {self.syn_image: inputs})
+            result = self.sess.run([self.x,self.d_score,self.s_score,self.c_score,self.p_score], {self.syn_image: inputs})
             x = result[0]
-            score = result[1]
+            d_score = result[1]
+            s_score = result[2]
+            c_score = result[3]
+            p_score = result[4]
             for im in range(len(x)):
                 os.makedirs(os.path.dirname(pa[im].replace(self.config.syn_data_dir,save_dir)),exist_ok=True)
                 Image.fromarray(x[im].astype(np.uint8)).save(pa[im].replace(self.config.syn_data_dir,save_dir))
@@ -285,6 +291,11 @@ class Trainer(object):
             balances3 = []
             self.x_all = []
             self.y_all = []
+            d_scores = []
+            s_scores = []
+            c_scores = []
+            p_scores = []
+
             reuse_vars = False
 
             optimizer = tf.train.AdamOptimizer
@@ -307,7 +318,7 @@ class Trainer(object):
                         reuse = reuse_vars
                         if hasattr(self, 'G_var'):
                             reuse = True
-                        output, self.G_var = Generator('G_inf', self.is_train, ngf=self.config.conv_hidden_num_res, norm='instance', image_size=self.input_scale_size,reuse=reuse, drop_keep=0.9)(input)
+                        output, self.G_var = Generator('G_inf', self.is_train, ngf=self.config.conv_hidden_num_res, norm='batch_norm', image_size=self.input_scale_size,reuse=reuse, drop_keep=0.9)(input)
                         #AddRealismLayers(input,self.conv_hidden_num,4,self.data_format,reuse=reuse)
                         return output
 
@@ -315,7 +326,7 @@ class Trainer(object):
                         reuse = reuse_vars
                         if hasattr(self, 'G_inv_var'):
                             reuse = True
-                        output, self.G_inv_var = Generator('G_inv', self.is_train, ngf=self.config.conv_hidden_num_res, norm='instance', image_size=self.input_scale_size, reuse=reuse)(input)
+                        output, self.G_inv_var = Generator('G_inv', self.is_train, ngf=self.config.conv_hidden_num_res, norm='batch_norm', image_size=self.input_scale_size, reuse=reuse)(input)
                         # AddRealismLayers(input,self.conv_hidden_num,4,self.data_format,reuse=reuse,inv=True)
                         return output
 
@@ -345,7 +356,7 @@ class Trainer(object):
                     self.x_all.append(x)
                     self.y_all.append(y_)
 
-                    C_input = tf.image.resize_bilinear(x, [160, 160])
+                    C_input = tf.image.resize_bilinear(self.x, [160, 160])
                     C_input = tf.map_fn(lambda frame: tf.image.per_image_standardization(frame), C_input)
                     C = ModuleC(self.config)
                     self.c_loss, self.C_var, self.C_logits_var = \
@@ -385,16 +396,25 @@ class Trainer(object):
                     d_loss_back, g_loss_back, balance2, D_var_back, _, _ = D("D_back",tf.concat([y, y_],0), syn_image, self.k_t2, two_x=True)
                     self.g_loss = g_loss_forw + g_loss_back
                     self.d_loss = d_loss_forw + d_loss_back
-                    self.score = g_loss_forw
                     # Optimization
+
+                    mask = tf.cast(tf.greater(self.syn_image[gpu_ind], 0.5), tf.float32)
+                    pixel_loss = tf.reduce_mean(mask * (tf.abs(x - syn_image)))
 
                     #self.ren_optim = g_optimizer.minimize(self.ren_loss, global_step=self.step,var_list=self.R_var )
 
                     #self.reg_optim = g_optimizer.minimize(self.reg_loss, global_step=self.step,var_list=self.G_inv_var )
+                    if self.config.method_c == 'softmax':
+                        g_optim = g_optimizer.compute_gradients(
+                            g_loss_forw + self.config.lambda_c * self.c_loss + self.config.lambda_s * (self.s_loss) + self.config.lambda_a * pixel_loss,
+                            var_list=self.G_var + self.C_logits_var)
+                    elif self.config.method_c == 'none':
+                        g_optim = g_optimizer.compute_gradients(g_loss_forw + self.config.lambda_s * (self.s_loss)+ self.config.lambda_a * pixel_loss,var_list=self.G_var)
+                    else:
+                        g_optim = g_optimizer.compute_gradients(
+                            g_loss_forw + self.config.lambda_c * self.c_loss + self.config.lambda_s * (self.s_loss) + self.config.lambda_a * pixel_loss,
+                            var_list=self.G_var)
 
-                    #g_optim = g_optimizer.compute_gradients( g_loss_forw + self.config.lambda_c*self.c_loss + self.config.lambda_s *(self.s_loss), var_list=self.G_var+self.C_logits_var)
-
-                    g_optim = g_optimizer.compute_gradients( g_loss_forw + self.config.lambda_s *(self.s_loss), var_list=self.G_var)
 
                     g_inv_optim = g_inv_optimizer.compute_gradients(g_loss_back + self.config.lambda_d*sd_loss_forw + self.config.lambda_s *(self.s_loss), var_list=self.G_inv_var )
 
@@ -406,6 +426,11 @@ class Trainer(object):
                     balances1.append(balance)
                     balances2.append(balance2)
                     balances3.append(balance3)
+
+                    d_scores.append(g_loss_forw)
+                    s_scores.append(self.s_loss)
+                    c_scores.append(self.c_loss)
+                    p_scores.append(pixel_loss)
 
                     self.balance = balance #self.gamma * self.d_loss_real - self.g_loss
                     #self.measure = self.d_loss_real + tf.abs(self.balance)
@@ -434,14 +459,14 @@ class Trainer(object):
                             #tf.summary.image("filters", kernel_transposed),
                             tf.summary.image("AE_x", self.AE_x),
                             tf.summary.image("AE_u", self.AE_u),
-
                             tf.summary.scalar("loss/d_loss", self.d_loss),
                             tf.summary.scalar("loss/s_loss", self.s_loss),
+                            tf.summary.scalar("loss/pixel_loss", pixel_loss),
                             #tf.summary.scalar("loss/p_loss", self.p_loss),
                             tf.summary.scalar("loss/g_loss", self.g_loss),
                             tf.summary.scalar("loss/g_loss_back", g_loss_back),
                             tf.summary.scalar("loss/c_loss", self.c_loss),
-                            #tf.summary.scalar("loss/sd_loss_back", sd_loss_back),
+                            tf.summary.scalar("loss/sd_loss_forw", sd_loss_forw),
                             #tf.summary.scalar("loss/ren_loss", self.ren_loss),
                             #tf.summary.scalar("loss/reg_loss", self.reg_loss),
                             #tf.summary.scalar("loss/reg_test_loss", self.reg_test_loss),
@@ -470,6 +495,10 @@ class Trainer(object):
             self.x_all = denorm_img(self.x_all_norm)
             self.y_all_norm = tf.concat(self.y_all,0)
             self.y_all = denorm_img(self.y_all_norm)
+            self.d_score = tf.concat(d_scores,0)
+            self.s_score = tf.concat(s_scores,0)
+            self.c_score = tf.concat(c_scores,0)
+            self.p_score = tf.concat(p_scores,0)
 
             with tf.control_dependencies([train_op_G, train_op_G_inv, train_op_D, variables_averages_op]):
                 self.k_update = tf.assign(

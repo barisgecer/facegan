@@ -25,7 +25,7 @@ def c7s1_k(input, k, reuse=False, norm='instance', activation='relu', is_trainin
         strides=[1, 1, 1, 1], padding='VALID')
 
     normalized = _norm(conv, is_training, norm)
-
+    output = normalized
     if activation == 'relu':
       output = tf.nn.relu(normalized)
     if activation == 'tanh':

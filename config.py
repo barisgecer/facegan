@@ -78,9 +78,11 @@ train_arg.add_argument('--gamma', type=float, default=0.5)
 train_arg.add_argument('--lambda_k', type=float, default=0.001)
 train_arg.add_argument('--use_gpu', type=str2bool, default=True)
 train_arg.add_argument('--lambda_d', type=float, default=0.1, help='')
-train_arg.add_argument('--lambda_s', type=float, default=0.1, help='')
+train_arg.add_argument('--lambda_s', type=float, default=0.2, help='')
 train_arg.add_argument('--lambda_c', type=float, default=0.0, help='')
+train_arg.add_argument('--lambda_a', type=float, default=0.02, help='')
 
+train_arg.add_argument('--method_c', type=str, default="none",choices=['none','magnet','softmax','center'])
 # Misc
 misc_arg = add_argument_group('Misc')
 misc_arg.add_argument('--load_path', type=str, default='')
