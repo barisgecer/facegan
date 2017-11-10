@@ -18,7 +18,6 @@ import cv2
 import pickle
 import os.path
 from PIL import Image
-from buffer import Buffer
 
 #denemes
 def next(loader):
@@ -193,9 +192,7 @@ class Trainer(object):
                     "d_loss": self.d_loss,
                     "k_t": self.k_t,
                 })
-            result = self.sess.run(fetch_dict,{self.x_hist: self.history_buffer.sample()})
-
-            self.history_buffer.push(result['output'])
+            result = self.sess.run(fetch_dict)
             #measure = result['measure']
             #measure_history.append(measure)
 
@@ -383,7 +380,7 @@ class Trainer(object):
                     sd_loss_forw = sd_loss_real_forw - self.k_t3 * self.s_loss
                     balance3 = self.gamma * sd_loss_real_forw - self.s_loss
 
-                    d_loss_forw, g_loss_forw, balance, D_var_forw, self.AE_x, self.AE_u = D("D_forw",tf.concat([x, self.x_hist],0),real_image_norm, self.k_t,two_x=True)
+                    d_loss_forw, g_loss_forw, balance, D_var_forw, self.AE_x, self.AE_u = D("D_forw",x,real_image_norm, self.k_t,two_x=False)
 
                     d_loss_back, g_loss_back, balance2, D_var_back, _, _ = D("D_back",tf.concat([y, y_],0), syn_image, self.k_t2, two_x=True)
                     self.g_loss = g_loss_forw + g_loss_back
