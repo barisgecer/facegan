@@ -61,14 +61,13 @@ def slerp(val, low, high):
 
 
 class Trainer(object):
-    def __init__(self, config, real_image, syn_image, syn_label, image_3dmm, annot_3dmm, latent_3dmm):
+    def __init__(self, config, real_image, syn_image, syn_label, image_3dmm, annot_3dmm):
         self.config = config
         self.real_image = real_image
         self.syn_image = syn_image
         self.syn_label = syn_label
         self.image_3dmm = image_3dmm
         self.annot_3dmm = annot_3dmm
-        self.latent_3dmm = latent_3dmm
         self.dataset = config.dataset
         self.n_id_exam_id = config.num_log_id
         self.n_im_per_id = config.num_log_samples
@@ -119,7 +118,6 @@ class Trainer(object):
             get_conv_shape(self.real_image, self.data_format)
         self.repeat_num = int(np.log2(height)) - 2
 
-        self.start_step = 0
         self.log_step = config.log_step
         self.max_step = int(config.max_step / config.num_gpu)
         self.save_step = config.save_step
@@ -134,19 +132,23 @@ class Trainer(object):
 
         c_loader = tf.train.Saver(c_var)
         if (not config.train_generator) | (config.load_path != '') :
-            variables_to_restore = variable_averages.variables_to_restore(self.gen_var)
-            var_scopes = list(set([x.name.split('/')[0] for x in self.gen_var]))
-            filtered_dict = {k: v for (k, v) in variables_to_restore.items() for x in var_scopes if x in k}
-            pre_train_saver = tf.train.Saver(filtered_dict)
-            self.is_train = False
+            if config.load_path != '':
+                with open(self.load_path + '/checkpoint') as file:
+                    data = file.readline()
+                config.pretrained_gen = self.load_path +'/'+ data.split("\"")[1]
+            else:
+                self.is_train = False
+            variables_to_restore = variable_averages.variables_to_restore()
+            #variables_to_restore = {k: v for k, v in variables_to_restore.items() if v.name != self.centroids.name}
+            self.pre_train_saver_avg = tf.train.Saver(variables_to_restore)
+            all_variables = tf.global_variables()
+            #all_variables = {v for v in all_variables if v.name != self.centroids.name}
+            self.pre_train_saver_all = tf.train.Saver(all_variables)
 
         def load_pretrain(sess):
             if (not config.train_generator) | (config.load_path != '') :
-                if config.load_path != '':
-                    with open(self.model_dir+'/checkpoint') as file:
-                        data = file.readline()
-                    config.pretrained_gen = data.split("\"")[1]
-                pre_train_saver.restore(sess, config.pretrained_gen)
+                self.pre_train_saver_all.restore(sess, config.pretrained_gen)
+                self.pre_train_saver_avg.restore(sess, config.pretrained_gen)
             c_loader.restore(sess, self.config.pretrained_rec)
 
         self.load_pretrain = load_pretrain
@@ -182,9 +184,17 @@ class Trainer(object):
         prev_measure = 1
         #measure_history = deque([0] * self.lr_update_step, self.lr_update_step)
 
-        for step in trange(self.start_step, self.max_step):
+        #find lr_update step
+        temp = self.sess.run(self.step)
+        while temp > self.lr_update_step:
+            temp = temp - self.lr_update_step
+            self.lr_update_step = int(self.lr_update_step/2)
+
+        for step in trange(self.sess.run(self.step), self.max_step):
             fetch_dict = {
                 "k_update": self.k_update,
+                "k_update2": self.k_update2,
+                "k_update3": self.k_update3,
                 "output": self.x_all_norm,
                 #"measure": self.measure,
             }
@@ -318,7 +328,7 @@ class Trainer(object):
                         reuse = reuse_vars
                         if hasattr(self, 'G_var'):
                             reuse = True
-                        output, self.G_var = Generator('G_inf', self.is_train, ngf=self.config.conv_hidden_num_res, norm='batch_norm', image_size=self.input_scale_size,reuse=reuse, drop_keep=0.9)(input)
+                        output, self.G_var = Generator('G_inf', self.is_train, ngf=self.config.conv_hidden_num_res, norm='batch_norm', image_size=self.input_scale_size,reuse=reuse, drop_keep=0.9,n_res_block=self.config.num_res_rep)(input)
                         #AddRealismLayers(input,self.conv_hidden_num,4,self.data_format,reuse=reuse)
                         return output
 
@@ -326,7 +336,7 @@ class Trainer(object):
                         reuse = reuse_vars
                         if hasattr(self, 'G_inv_var'):
                             reuse = True
-                        output, self.G_inv_var = Generator('G_inv', self.is_train, ngf=self.config.conv_hidden_num_res, norm='batch_norm', image_size=self.input_scale_size, reuse=reuse)(input)
+                        output, self.G_inv_var = Generator('G_inv', self.is_train, ngf=self.config.conv_hidden_num_res, norm='batch_norm', image_size=self.input_scale_size, reuse=reuse,n_res_block=self.config.num_res_rep)(input)
                         # AddRealismLayers(input,self.conv_hidden_num,4,self.data_format,reuse=reuse,inv=True)
                         return output
 
@@ -359,7 +369,7 @@ class Trainer(object):
                     C_input = tf.image.resize_bilinear(self.x, [160, 160])
                     C_input = tf.map_fn(lambda frame: tf.image.per_image_standardization(frame), C_input)
                     C = ModuleC(self.config)
-                    self.c_loss, self.C_var, self.C_logits_var = \
+                    self.c_loss, self.C_var, self.C_logits_var, self.centroids = \
                         C.getNetwork(image=C_input, label_batch=self.syn_label[gpu_ind], nrof_classes=self.n_id,reuse=reuse_vars)
 
                     def D(name,x, real_image_norm, k_t, reuse=False, two_x = False):
@@ -476,6 +486,7 @@ class Trainer(object):
                             #tf.summary.scalar("misc/measure", self.measure),
                             tf.summary.scalar("misc/k_t", self.k_t),
                             tf.summary.scalar("misc/k_t2", self.k_t2),
+                            tf.summary.scalar("misc/k_t3", self.k_t3),
                             tf.summary.scalar("misc/d_lr", self.d_lr),
                             tf.summary.scalar("misc/g_lr", self.g_lr),
                             tf.summary.scalar("misc/balance", tf.reduce_mean(balances1)),
@@ -495,10 +506,10 @@ class Trainer(object):
             self.x_all = denorm_img(self.x_all_norm)
             self.y_all_norm = tf.concat(self.y_all,0)
             self.y_all = denorm_img(self.y_all_norm)
-            self.d_score = tf.concat(d_scores,0)
-            self.s_score = tf.concat(s_scores,0)
-            self.c_score = tf.concat(c_scores,0)
-            self.p_score = tf.concat(p_scores,0)
+            self.d_score = tf.stack(d_scores,0)
+            self.s_score = tf.stack(s_scores,0)
+            self.c_score = tf.stack(c_scores,0)
+            self.p_score = tf.stack(p_scores,0)
 
             with tf.control_dependencies([train_op_G, train_op_G_inv, train_op_D, variables_averages_op]):
                 self.k_update = tf.assign(

@@ -30,6 +30,9 @@ class ModuleC(object):
         cross_entropy_mean = tf.reduce_mean(cross_entropy, name='cross_entropy')
         tf.add_to_collection('losses', cross_entropy_mean)
         logit_variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Logits')
+        with tf.variable_scope("centroids", reuse=reuse):  # reuse the second time
+            centroids = tf.get_variable('centers', [nrof_classes, self.config.embedding_size], dtype=tf.float32,
+                                        initializer=tf.constant_initializer(0), trainable=False)
 
         total_loss =  0
         # Calculate the total losses
@@ -37,17 +40,17 @@ class ModuleC(object):
             regularization_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
             total_loss = tf.add_n([cross_entropy_mean], name='total_loss')
         elif self.config.method_c == 'magnet':
-            total_loss,_ = magnet_loss(embeddings,label_batch,nrof_classes,self.config.embedding_size,center_alpha=self.config.center_loss_alfa)
+            total_loss,_ = magnet_loss(embeddings,label_batch,nrof_classes,centroids,center_alpha=self.config.center_loss_alfa)
         elif self.config.method_c == 'center':
-            total_loss,_ = center_loss(embeddings, label_batch, self.config.center_loss_alfa, nrof_classes)
+            total_loss,_ = center_loss(embeddings, label_batch,centroids, self.config.center_loss_alfa, nrof_classes)
 
         variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.config.facenet_scope)
 
-        return total_loss, variables, logit_variables
+        return total_loss, variables, logit_variables, centroids
 
 
 
-def magnet_loss(features, classes, nrof_classes, nrof_features, alpha=1.0, center_alpha=0.95):
+def magnet_loss(features, classes, nrof_classes, centroids, alpha=1.0, center_alpha=0.95):
     """Compute magnet loss.
 
     Given a tensor of features `r`, the assigned class for each example,
@@ -69,8 +72,7 @@ def magnet_loss(features, classes, nrof_classes, nrof_features, alpha=1.0, cente
         total_loss: The total magnet loss for the batch.
         losses: The loss for each example in the batch.
     """
-    centroids = tf.get_variable('centers', [nrof_classes, nrof_features], dtype=tf.float32,
-                                initializer=tf.constant_initializer(0), trainable=False)
+
     classes = tf.reshape(classes, [-1])
     centers_batch = tf.gather(centroids, classes)
     diff = (1 - center_alpha) * (centers_batch - features)
@@ -110,13 +112,11 @@ def magnet_loss(features, classes, nrof_classes, nrof_features, alpha=1.0, cente
     return total_loss, losses
 
 
-def center_loss(features, label, alfa, nrof_classes):
+def center_loss(features, label,centers, alfa, nrof_classes):
     """Center loss based on the paper "A Discriminative Feature Learning Approach for Deep Face Recognition"
        (http://ydwen.github.io/papers/WenECCV16.pdf)
     """
     nrof_features = features.get_shape()[1]
-    centers = tf.get_variable('centers', [nrof_classes, nrof_features], dtype=tf.float32,
-                              initializer=tf.constant_initializer(0), trainable=False)
     label = tf.reshape(label, [-1])
     centers_batch = tf.gather(centers, label)
     diff = (1 - alfa) * (centers_batch - features)

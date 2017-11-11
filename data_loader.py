@@ -32,7 +32,7 @@ def get_loader(root, batch_size, scale_size, data_format, split=None, is_graysca
         image = tf.image.rgb_to_grayscale(image)
     image.set_shape(shape)
 
-    min_after_dequeue = 500
+    min_after_dequeue = 5000
     capacity = min_after_dequeue + 3 * batch_size
 
     queue = tf.train.shuffle_batch(
@@ -103,7 +103,7 @@ def get_syn_loader(root, batch_size, scale_size, data_format, split=None, is_gra
         image = tf.image.rgb_to_grayscale(image)
     image.set_shape(shape)
 
-    min_after_dequeue = 500
+    min_after_dequeue = 5000
     capacity = min_after_dequeue + 3 * batch_size
 
     queue_image, queue_label = tf.train.shuffle_batch(
@@ -129,8 +129,6 @@ def get_3dmm_loader(root, batch_size, scale_size, data_format, split=None, is_gr
     if os.path.isfile(root +"/list.txt"):
         with open(root +"/list.txt", "rb") as fp:
             paths = pickle.load(fp)
-        with open(root +"/latentvars.txt", "rb") as fp:
-            latentvars = pickle.load(fp)
     else:
         for ext in ["jpg", "png"]:
             paths = glob("{}/*.{}".format(root, ext))
@@ -138,13 +136,6 @@ def get_3dmm_loader(root, batch_size, scale_size, data_format, split=None, is_gr
                 with open(root +"/list.txt", "wb") as fp:
                     pickle.dump(paths, fp)
                 break
-
-        latentvars = np.zeros((len(paths), 512), dtype=np.float32)
-        for i, latentvar in enumerate([p.replace(root, root+'/3dmm').replace('.jpg','_noise.txt') for p in paths]):
-            with open(latentvar) as file:
-                latentvars[i, :] = str.split(file.read(), "\n")[0:-1]
-        with open(root + "/latentvars.txt", "wb") as fp:
-            pickle.dump(latentvars, fp)
 
 
     with Image.open(paths[0]) as img:
@@ -156,12 +147,11 @@ def get_3dmm_loader(root, batch_size, scale_size, data_format, split=None, is_gr
     images_3dmm = tf.convert_to_tensor(list([p.replace(root, root+'/3dmm') for p in paths]))
 
     # Makes an input queue
-    input_queue = tf.train.slice_input_producer([images, images_3dmm, latentvars], shuffle=False, seed=seed)
+    input_queue = tf.train.slice_input_producer([images, images_3dmm], shuffle=False, seed=seed)
     #reader = tf.WholeFileReader()
     #filename, data = reader.read(input_queue[0])
     image = tf.image.decode_image(tf.read_file(input_queue[0]), channels=3)
     image_3dmm = tf.image.decode_image(tf.read_file(input_queue[1]), channels=3)
-    latentvar = input_queue[2]
     #label = input_queue[1]
     #reader = tf.TextLineReader()
     #_, latentvar = reader.read(input_queue[2])
@@ -178,11 +168,11 @@ def get_3dmm_loader(root, batch_size, scale_size, data_format, split=None, is_gr
     image.set_shape(shape)
     image_3dmm.set_shape(shape)
 
-    min_after_dequeue = 500
+    min_after_dequeue = 5000
     capacity = min_after_dequeue + 3 * batch_size
 
-    queue_image, queue_3dmm, queue_latentvar = tf.train.shuffle_batch(
-        [image, image_3dmm, latentvar ], batch_size=batch_size,
+    queue_image, queue_3dmm = tf.train.shuffle_batch(
+        [image, image_3dmm ], batch_size=batch_size,
         num_threads=4, capacity=capacity,
         min_after_dequeue=min_after_dequeue, name='real_3dmm_inputs')
 
@@ -196,4 +186,4 @@ def get_3dmm_loader(root, batch_size, scale_size, data_format, split=None, is_gr
     else:
         raise Exception("[!] Unkown data_format: {}".format(data_format))
 
-    return tf.to_float(queue_image), tf.to_float(queue_3dmm), queue_latentvar
+    return tf.to_float(queue_image), tf.to_float(queue_3dmm)
