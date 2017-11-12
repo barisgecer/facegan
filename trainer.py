@@ -241,12 +241,11 @@ class Trainer(object):
         for i in range(0,len(paths),self.config.batch_size):
             pa = paths[i:min(i + self.config.batch_size, len(paths))]
             inputs = np.array([cv2.imread(pa[j])[..., ::-1] for j in np.arange(len(pa))])
-            result = self.sess.run([self.x,self.d_score,self.s_score,self.c_score,self.p_score], {self.syn_image: inputs})
+            result = self.sess.run([self.x,self.d_score,self.s_score,self.c_score], {self.syn_image: inputs})
             x = result[0]
             d_score = result[1]
             s_score = result[2]
             c_score = result[3]
-            p_score = result[4]
             for im in range(len(x)):
                 os.makedirs(os.path.dirname(pa[im].replace(self.config.syn_data_dir,save_dir)),exist_ok=True)
                 Image.fromarray(x[im].astype(np.uint8)).save(pa[im].replace(self.config.syn_data_dir,save_dir))
@@ -304,7 +303,6 @@ class Trainer(object):
             d_scores = []
             s_scores = []
             c_scores = []
-            p_scores = []
 
             reuse_vars = False
 
@@ -408,21 +406,18 @@ class Trainer(object):
                     self.d_loss = d_loss_forw + d_loss_back
                     # Optimization
 
-                    mask = tf.cast(tf.greater(self.syn_image[gpu_ind], 0.5), tf.float32)
-                    pixel_loss = tf.reduce_mean(mask * (tf.abs(x - syn_image)))
-
                     #self.ren_optim = g_optimizer.minimize(self.ren_loss, global_step=self.step,var_list=self.R_var )
 
                     #self.reg_optim = g_optimizer.minimize(self.reg_loss, global_step=self.step,var_list=self.G_inv_var )
                     if self.config.method_c == 'softmax':
                         g_optim = g_optimizer.compute_gradients(
-                            g_loss_forw + self.config.lambda_c * self.c_loss + self.config.lambda_s * (self.s_loss) + self.config.lambda_a * pixel_loss,
+                            g_loss_forw + self.config.lambda_c * self.c_loss + self.config.lambda_s * (self.s_loss),
                             var_list=self.G_var + self.C_logits_var)
                     elif self.config.method_c == 'none':
-                        g_optim = g_optimizer.compute_gradients(g_loss_forw + self.config.lambda_s * (self.s_loss)+ self.config.lambda_a * pixel_loss,var_list=self.G_var)
+                        g_optim = g_optimizer.compute_gradients(g_loss_forw + self.config.lambda_s * (self.s_loss),var_list=self.G_var)
                     else:
                         g_optim = g_optimizer.compute_gradients(
-                            g_loss_forw + self.config.lambda_c * self.c_loss + self.config.lambda_s * (self.s_loss) + self.config.lambda_a * pixel_loss,
+                            g_loss_forw + self.config.lambda_c * self.c_loss + self.config.lambda_s * (self.s_loss),
                             var_list=self.G_var)
 
 
@@ -440,7 +435,6 @@ class Trainer(object):
                     d_scores.append(g_loss_forw)
                     s_scores.append(self.s_loss)
                     c_scores.append(self.c_loss)
-                    p_scores.append(pixel_loss)
 
                     self.balance = balance #self.gamma * self.d_loss_real - self.g_loss
                     #self.measure = self.d_loss_real + tf.abs(self.balance)
@@ -471,7 +465,7 @@ class Trainer(object):
                             tf.summary.image("AE_u", self.AE_u),
                             tf.summary.scalar("loss/d_loss", self.d_loss),
                             tf.summary.scalar("loss/s_loss", self.s_loss),
-                            tf.summary.scalar("loss/pixel_loss", pixel_loss),
+                            #tf.summary.scalar("loss/pixel_loss", pixel_loss),
                             #tf.summary.scalar("loss/p_loss", self.p_loss),
                             tf.summary.scalar("loss/g_loss", self.g_loss),
                             tf.summary.scalar("loss/g_loss_back", g_loss_back),
@@ -509,7 +503,6 @@ class Trainer(object):
             self.d_score = tf.stack(d_scores,0)
             self.s_score = tf.stack(s_scores,0)
             self.c_score = tf.stack(c_scores,0)
-            self.p_score = tf.stack(p_scores,0)
 
             with tf.control_dependencies([train_op_G, train_op_G_inv, train_op_D, variables_averages_op]):
                 self.k_update = tf.assign(
