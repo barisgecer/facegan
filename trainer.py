@@ -133,9 +133,9 @@ class Trainer(object):
         c_loader = tf.train.Saver(c_var)
         if (not config.train_generator) | (config.load_path != '') :
             if config.load_path != '':
-                with open(self.load_path + '/checkpoint') as file:
+                with open(self.config.log_dir + '/' + self.load_path + '/checkpoint') as file:
                     data = file.readline()
-                config.pretrained_gen = self.load_path +'/'+ data.split("\"")[1]
+                config.pretrained_gen = self.config.log_dir + '/' + self.load_path +'/'+ data.split("\"")[1]
             else:
                 self.is_train = False
             variables_to_restore = variable_averages.variables_to_restore()
