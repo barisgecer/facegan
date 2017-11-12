@@ -370,12 +370,12 @@ class Trainer(object):
                     self.c_loss, self.C_var, self.C_logits_var, self.centroids = \
                         C.getNetwork(image=C_input, label_batch=self.syn_label[gpu_ind], nrof_classes=self.n_id,reuse=reuse_vars)
 
-                    def D(name,x, real_image_norm, k_t, reuse=False, two_x = False):
+                    def D(name,x, real_image_norm, k_t,conv_hidden_num = 64, reuse=False, two_x = False):
                         # TO-DO: Patch-based Discriminator
                         # TO-DO: History of generated images
                         d_out, self.D_z, D_var = DiscriminatorCNN(name,
                             tf.concat([x, real_image_norm], 0), self.channel, self.z_num, self.repeat_num,
-                            self.conv_hidden_num, self.data_format,(reuse | reuse_vars))
+                            conv_hidden_num, self.data_format,(reuse | reuse_vars))
                         if two_x:
                             AE_x1, AE_x2, AE_u = tf.split(d_out, 3)
                             AE_x = tf.concat([AE_x1, AE_x2],0)
@@ -399,7 +399,7 @@ class Trainer(object):
                     sd_loss_forw = sd_loss_real_forw - self.k_t3 * self.s_loss
                     balance3 = self.gamma * sd_loss_real_forw - self.s_loss
 
-                    d_loss_forw, g_loss_forw, balance, D_var_forw, self.AE_x, self.AE_u = D("D_forw",x,real_image_norm, self.k_t,two_x=False)
+                    d_loss_forw, g_loss_forw, balance, D_var_forw, self.AE_x, self.AE_u = D("D_forw",x,real_image_norm, self.k_t, self.conv_hidden_num, two_x=False)
 
                     d_loss_back, g_loss_back, balance2, D_var_back, _, _ = D("D_back",tf.concat([y, y_],0), syn_image, self.k_t2, two_x=True)
                     self.g_loss = g_loss_forw + g_loss_back
