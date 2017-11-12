@@ -37,15 +37,15 @@ def main(config):
     with tf.device('/cpu:0'):
         data_loader = get_loader(
                 data_path, config.batch_size*config.num_gpu, config.input_scale_size,
-                config.data_format, config.split)
+                config.data_format, config)
 
         syn_image, syn_label, config.n_id = get_syn_loader(
                 config.syn_data_dir, config.batch_size*config.num_gpu, config.syn_scale_size,
-                config.data_format, config.split)
+                config.data_format, config)
 
         image_3dmm, annot_3dmm = get_3dmm_loader(
                 config.dataset_3dmm_dir, config.batch_size*config.num_gpu, config.syn_scale_size,
-                config.data_format, config.split)
+                config.data_format, config)
 
     #image_3dmm_test, annot_3dmm_test, latent_3dmm_test = get_3dmm_loader(
     #        config.dataset_3dmm_test_dir, config.batch_size, config.syn_scale_size,

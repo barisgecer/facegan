@@ -6,7 +6,7 @@ import numpy as np
 import pickle
 import os.path
 
-def get_loader(root, batch_size, scale_size, data_format, split=None, is_grayscale=False, seed=None):
+def get_loader(root, batch_size, scale_size, data_format, config=None, is_grayscale=False, seed=None):
 
     if os.path.isfile(root +"/list.txt"):
         with open(root +"/list.txt", "rb") as fp:
@@ -32,12 +32,12 @@ def get_loader(root, batch_size, scale_size, data_format, split=None, is_graysca
         image = tf.image.rgb_to_grayscale(image)
     image.set_shape(shape)
 
-    min_after_dequeue = 5000
+    min_after_dequeue = 5000*config.num_gpu
     capacity = min_after_dequeue + 3 * batch_size
 
     queue = tf.train.shuffle_batch(
         [image], batch_size=batch_size,
-        num_threads=4, capacity=capacity,
+        num_threads=4*config.num_gpu, capacity=capacity,
         min_after_dequeue=min_after_dequeue, name='real_inputs')
 
     #queue = tf.image.crop_to_bounding_box(queue, 100, 50, 78, 78)
@@ -53,7 +53,7 @@ def get_loader(root, batch_size, scale_size, data_format, split=None, is_graysca
     return tf.to_float(queue)
 
 
-def get_syn_loader(root, batch_size, scale_size, data_format, split=None, is_grayscale=False, seed=None):
+def get_syn_loader(root, batch_size, scale_size, data_format, config=None, is_grayscale=False, seed=None):
 
     labels = []
     if os.path.isfile(root +"/list.txt"):
@@ -103,12 +103,12 @@ def get_syn_loader(root, batch_size, scale_size, data_format, split=None, is_gra
         image = tf.image.rgb_to_grayscale(image)
     image.set_shape(shape)
 
-    min_after_dequeue = 5000
+    min_after_dequeue = 5000*config.num_gpu
     capacity = min_after_dequeue + 3 * batch_size
 
     queue_image, queue_label = tf.train.shuffle_batch(
         [image, label], batch_size=batch_size,
-        num_threads=4, capacity=capacity,
+        num_threads=4*config.num_gpu, capacity=capacity,
         min_after_dequeue=min_after_dequeue, name='synthetic_inputs',seed=seed)
 
     #queue_image = tf.image.crop_to_bounding_box(queue_image, 34, 34, 64, 64)
@@ -124,7 +124,7 @@ def get_syn_loader(root, batch_size, scale_size, data_format, split=None, is_gra
     return tf.to_float(queue_image), queue_label, n_id
 
 
-def get_3dmm_loader(root, batch_size, scale_size, data_format, split=None, is_grayscale=False, seed=None):
+def get_3dmm_loader(root, batch_size, scale_size, data_format, config=None, is_grayscale=False, seed=None):
 
     if os.path.isfile(root +"/list.txt"):
         with open(root +"/list.txt", "rb") as fp:
@@ -168,12 +168,12 @@ def get_3dmm_loader(root, batch_size, scale_size, data_format, split=None, is_gr
     image.set_shape(shape)
     image_3dmm.set_shape(shape)
 
-    min_after_dequeue = 5000
+    min_after_dequeue = 5000*config.num_gpu
     capacity = min_after_dequeue + 3 * batch_size
 
     queue_image, queue_3dmm = tf.train.shuffle_batch(
         [image, image_3dmm ], batch_size=batch_size,
-        num_threads=4, capacity=capacity,
+        num_threads=4*config.num_gpu, capacity=capacity,
         min_after_dequeue=min_after_dequeue, name='real_3dmm_inputs')
 
     #queue_image = tf.image.crop_to_bounding_box(queue_image, 34, 34, 64, 64)
