@@ -123,6 +123,10 @@ class Trainer(object):
         self.save_step = config.save_step
         self.lr_update_step = int(config.lr_update_step / config.num_gpu)
 
+        self.reset_g_lr = tf.assign(self.g_lr, self.config.g_lr)
+        self.reset_d_lr = tf.assign(self.d_lr, self.config.d_lr)
+        self.reset_lambda_c = tf.assign(self.lambda_c, self.config.lambda_c)
+
         self.is_train = True#config.is_train
         self.gen_var, c_var, variable_averages = self.build_model()
 
@@ -156,7 +160,7 @@ class Trainer(object):
 
 
     def prepare_session(self, var_saved):
-        self.saver = tf.train.Saver(var_saved)
+        self.saver = tf.train.Saver(var_saved,max_to_keep=100000)
         sv = tf.train.Supervisor(logdir=self.model_dir,
                                  is_chief=True,
                                  saver=self.saver,
@@ -185,6 +189,7 @@ class Trainer(object):
         #measure_history = deque([0] * self.lr_update_step, self.lr_update_step)
 
         #find lr_update step
+        self.sess.run([self.reset_g_lr,self.reset_d_lr,self.reset_lambda_c])
         temp = self.sess.run(self.step)
         while temp > self.lr_update_step:
             temp = temp - self.lr_update_step
