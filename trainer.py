@@ -188,6 +188,7 @@ class Trainer(object):
         temp = self.sess.run(self.step)
         while temp > self.lr_update_step:
             temp = temp - self.lr_update_step
+            self.sess.run([self.g_lr_update, self.d_lr_update, self.lambda_c_update])
             self.lr_update_step = int(self.lr_update_step/2)
 
         for step in trange(self.sess.run(self.step), self.max_step):
@@ -483,6 +484,7 @@ class Trainer(object):
                             tf.summary.scalar("misc/k_t3", self.k_t3),
                             tf.summary.scalar("misc/d_lr", self.d_lr),
                             tf.summary.scalar("misc/g_lr", self.g_lr),
+                            tf.summary.scalar("misc/lambda_c", self.lambda_c),
                             tf.summary.scalar("misc/balance", tf.reduce_mean(balances1)),
                         ])
                     #tf.get_variable_scope().reuse_variables()
