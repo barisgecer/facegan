@@ -98,7 +98,7 @@ class Trainer(object):
                                      name='ren_lr_update')
         self.reg_lr_update = tf.assign(self.reg_lr, tf.maximum(self.reg_lr * 0.5, config.lr_lower_boundary),
                                      name='reg_lr_update')
-        self.lambda_c_update = tf.assign(self.lambda_c, self.lambda_c * 10, name='lambda_c_update')
+        self.lambda_c_update = tf.assign(self.lambda_c, tf.minimum(self.lambda_c * 10, config.lambda_c_upper), name='lambda_c_update')
         self.n_id = config.n_id
 
         self.gamma = config.gamma
