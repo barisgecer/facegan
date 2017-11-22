@@ -160,7 +160,7 @@ class Trainer(object):
 
 
     def prepare_session(self, var_saved):
-        self.saver = tf.train.Saver(var_saved,max_to_keep=100000)
+        self.saver = tf.train.Saver(var_saved,max_to_keep=1)
         sv = tf.train.Supervisor(logdir=self.model_dir,
                                  is_chief=True,
                                  saver=self.saver,
