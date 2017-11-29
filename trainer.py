@@ -401,7 +401,8 @@ class Trainer(object):
                     #self.p_loss = tf.reduce_mean(tf.abs(real_image_norm - x_))
                     self.s_loss = tf.reduce_mean(tf.abs(syn_image - y))
 
-                    sd_loss_real_forw = tf.reduce_mean(tf.abs(paired_y - norm_img(self.annot_3dmm[gpu_ind])))
+                    mask = tf.cast(tf.greater(self.annot_3dmm[gpu_ind], 0), tf.float32)
+                    sd_loss_real_forw = tf.reduce_mean(mask * tf.abs(paired_y - norm_img(self.annot_3dmm[gpu_ind])))
                     sd_loss_forw = sd_loss_real_forw - self.k_t3 * self.s_loss
                     balance3 = self.gamma * sd_loss_real_forw - self.s_loss
 
