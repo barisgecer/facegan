@@ -90,8 +90,8 @@ def save_image(tensor, filename, nrow=8, padding=2,
     ndarr = make_grid(tensor, nrow=nrow, padding=padding,
                             normalize=normalize, scale_each=scale_each)
     im = Image.fromarray(ndarr)
-    im.save(filename)
+    im.save(filename, quality=100)
 
 def save_one_image(tensor, filename):
     im = Image.fr (tensor)
-    im.save(filename)
+    im.save(filename, quality=100)
