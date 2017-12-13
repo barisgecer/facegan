@@ -98,7 +98,7 @@ class Trainer(object):
                                      name='ren_lr_update')
         self.reg_lr_update = tf.assign(self.reg_lr, tf.maximum(self.reg_lr * 0.5, config.lr_lower_boundary),
                                      name='reg_lr_update')
-        self.lambda_c_update = tf.assign(self.lambda_c, tf.minimum(self.lambda_c * 10 + 0.01, config.lambda_c_upper), name='lambda_c_update')
+        self.lambda_c_update = tf.assign(self.lambda_c, tf.minimum(self.lambda_c * 2, config.lambda_c_upper), name='lambda_c_update')
         self.n_id = config.n_id
 
         self.gamma = config.gamma
@@ -139,7 +139,10 @@ class Trainer(object):
             if config.load_path != '':
                 with open(self.config.log_dir + '/' + self.load_path + '/checkpoint') as file:
                     data = file.readline()
-                config.pretrained_gen = self.config.log_dir + '/' + self.load_path +'/'+ data.split("\"")[1]
+                #if os.name == 'nt':
+                #    config.pretrained_gen = self.config.log_dir + '/' + self.load_path +'/'+ data.split("\"")[1]
+                #else:
+                config.pretrained_gen = data.split("\"")[1]
             else:
                 self.is_train = False
             variables_to_restore = variable_averages.variables_to_restore()
@@ -364,16 +367,15 @@ class Trainer(object):
                     #syn_image_noise = tf.concat(syn_image, tf.random_normal((tf.shape(syn_image)[1], tf.shape(syn_image)[2])),3)
                     #y_noise_ = tf.concat(y_, tf.random_normal((tf.shape(y_)[1], tf.shape(y_)[2])),3)
                     x = G(syn_image)
-                    y,y_, paired_y = tf.split(G_inv(tf.concat([x,real_image_norm,norm_img(self.image_3dmm[gpu_ind])],0)),3)
+                    y, paired_y = tf.split(G_inv(tf.concat([x,norm_img(self.image_3dmm[gpu_ind])],0)),2)
                     self.x = denorm_img(x)
                     self.y = denorm_img(y)
                     self.x_all.append(x)
-                    self.y_all.append(y_)
 
                     C_input = tf.image.resize_bilinear(self.x, [160, 160])
                     C_input = tf.map_fn(lambda frame: tf.image.per_image_standardization(frame), C_input)
                     C = ModuleC(self.config)
-                    self.c_loss, self.C_var, self.C_logits_var, self.centroids = \
+                    self.c_loss, self.C_var, self.C_logits_var, self.centroids, c_loss_each = \
                         C.getNetwork(image=C_input, label_batch=self.syn_label[gpu_ind], nrof_classes=self.n_id,reuse=reuse_vars)
 
                     def D(name,x, real_image_norm, k_t,conv_hidden_num = 64, reuse=False, two_x = False):
@@ -396,19 +398,18 @@ class Trainer(object):
                         g_loss = tf.reduce_mean(tf.abs(AE_x - x))
                         d_loss = d_loss_real - k_t * g_loss
                         balance = self.gamma * d_loss_real - g_loss
-                        return d_loss, g_loss, balance, D_var, AE_x1 , AE_u
+                        return d_loss, g_loss, balance, D_var, AE_x1 , AE_u, tf.reduce_mean(tf.abs(AE_x - x),[1,2,3])
 
                     #self.p_loss = tf.reduce_mean(tf.abs(real_image_norm - x_))
                     self.s_loss = tf.reduce_mean(tf.abs(syn_image - y))
 
-                    mask = tf.cast(tf.greater(self.annot_3dmm[gpu_ind], 0), tf.float32)
-                    sd_loss_real_forw = tf.reduce_mean(mask * tf.abs(paired_y - norm_img(self.annot_3dmm[gpu_ind])))
+                    sd_loss_real_forw = tf.reduce_mean(tf.abs(paired_y - norm_img(self.annot_3dmm[gpu_ind])))
                     sd_loss_forw = sd_loss_real_forw - self.k_t3 * self.s_loss
                     balance3 = self.gamma * sd_loss_real_forw - self.s_loss
 
-                    d_loss_forw, g_loss_forw, balance, D_var_forw, self.AE_x, self.AE_u = D("D_forw",x,real_image_norm, self.k_t, self.conv_hidden_num, two_x=False)
+                    d_loss_forw, g_loss_forw, balance, D_var_forw, self.AE_x, self.AE_u, g_loss_forw_each = D("D_forw",x,real_image_norm, self.k_t, self.conv_hidden_num, two_x=False)
 
-                    d_loss_back, g_loss_back, balance2, D_var_back, _, _ = D("D_back",tf.concat([y, y_],0), syn_image, self.k_t2, two_x=True)
+                    d_loss_back, g_loss_back, balance2, D_var_back, _, _, _ = D("D_back",y, syn_image, self.k_t2, two_x=False)
                     self.g_loss = g_loss_forw + g_loss_back
                     self.d_loss = d_loss_forw + d_loss_back
                     # Optimization
@@ -439,9 +440,9 @@ class Trainer(object):
                     balances2.append(balance2)
                     balances3.append(balance3)
 
-                    d_scores.append(g_loss_forw)
-                    s_scores.append(self.s_loss)
-                    c_scores.append(self.c_loss)
+                    d_scores.append(g_loss_forw_each)
+                    s_scores.append(tf.reduce_mean(tf.abs(syn_image - y),[1,2,3]))
+                    c_scores.append(c_loss_each)
 
                     self.balance = balance #self.gamma * self.d_loss_real - self.g_loss
                     #self.measure = self.d_loss_real + tf.abs(self.balance)
@@ -506,8 +507,6 @@ class Trainer(object):
             variables_averages_op = variable_averages.apply(tf.trainable_variables())
             self.x_all_norm = tf.concat(self.x_all,0)
             self.x_all = denorm_img(self.x_all_norm)
-            self.y_all_norm = tf.concat(self.y_all,0)
-            self.y_all = denorm_img(self.y_all_norm)
             self.d_score = tf.stack(d_scores,0)
             self.s_score = tf.stack(s_scores,0)
             self.c_score = tf.stack(c_scores,0)

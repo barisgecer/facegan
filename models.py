@@ -187,7 +187,7 @@ def DiscriminatorCNN(name, x, input_channel, z_num, repeat_num, hidden_num, data
     with tf.variable_scope(name, reuse=reuse) as vs:
         # Encoder
         x = slim.conv2d(x, hidden_num, 3, 1, activation_fn=tf.nn.elu, data_format=data_format)
-
+        startdim = int(x.shape[1])
         prev_channel_num = hidden_num
         for idx in range(repeat_num):
             channel_num = hidden_num * (idx + 1)
@@ -197,13 +197,14 @@ def DiscriminatorCNN(name, x, input_channel, z_num, repeat_num, hidden_num, data
                 x = slim.conv2d(x, channel_num, 3, 2, activation_fn=tf.nn.elu, data_format=data_format)
                 #x = tf.contrib.layers.max_pool2d(x, [2, 2], [2, 2], padding='VALID')
 
-        x = tf.reshape(x, [-1, np.prod([8, 8, channel_num])])
+        dim = int(x.shape[1])
+        x = tf.reshape(x, [-1, np.prod([dim, dim, channel_num])])
         z = x = slim.fully_connected(x, z_num, activation_fn=None)
 
         # Decoder
-        num_output = int(np.prod([8, 8, hidden_num]))
+        num_output = int(np.prod([dim, dim, hidden_num]))
         x = slim.fully_connected(x, num_output, activation_fn=None)
-        x = reshape(x, 8, 8, hidden_num, data_format)
+        x = reshape(x, dim, dim, hidden_num, data_format)
         
         for idx in range(repeat_num):
             x = slim.conv2d(x, hidden_num, 3, 1, activation_fn=tf.nn.elu, data_format=data_format)
@@ -212,6 +213,9 @@ def DiscriminatorCNN(name, x, input_channel, z_num, repeat_num, hidden_num, data
                 x = upscale(x, 2, data_format)
 
         out = slim.conv2d(x, input_channel, 3, 1, activation_fn=None, data_format=data_format)
+        enddim = int(out.shape[1])
+        offset = max(0,int((enddim - startdim)/2))
+        out = tf.image.crop_to_bounding_box(out, offset, offset, startdim, startdim)
 
     variables = tf.contrib.framework.get_variables(vs)
     return out, z, variables

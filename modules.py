@@ -35,18 +35,19 @@ class ModuleC(object):
                                         initializer=tf.constant_initializer(0), trainable=False)
 
         total_loss =  0
+        c_loss_each = 0
         # Calculate the total losses
         if self.config.method_c == 'softmax':
             regularization_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
             total_loss = tf.add_n([cross_entropy_mean], name='total_loss')
         elif self.config.method_c == 'magnet':
-            total_loss,_ = magnet_loss(embeddings,label_batch,nrof_classes,centroids,center_alpha=self.config.center_loss_alfa)
+            total_loss,c_loss_each = magnet_loss(embeddings,label_batch,nrof_classes,centroids,center_alpha=self.config.center_loss_alfa)
         elif self.config.method_c == 'center':
             total_loss,_ = center_loss(embeddings, label_batch,centroids, self.config.center_loss_alfa, nrof_classes)
 
         variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.config.facenet_scope)
 
-        return total_loss, variables, logit_variables, centroids
+        return total_loss, variables, logit_variables, centroids, c_loss_each
 
 
 
