@@ -32,6 +32,36 @@ def c7s1_k(input, k, reuse=False, norm='instance', activation='relu', is_trainin
       output = tf.nn.tanh(normalized)
     return output
 
+def c3s1_k(input, k, reuse=False, norm='instance', activation='relu', is_training=True, name='c7s1_k'):
+  """ A 7x7 Convolution-BatchNorm-ReLU layer with k filters and stride 1
+  Args:
+    input: 4D tensor
+    k: integer, number of filters (output depth)
+    norm: 'instance' or 'batch' or None
+    activation: 'relu' or 'tanh'
+    name: string, e.g. 'c7sk-32'
+    is_training: boolean or BoolTensor
+    name: string
+    reuse: boolean
+  Returns:
+    4D tensor
+  """
+  with tf.variable_scope(name, reuse=reuse):
+    weights = _weights("weights",
+      shape=[3, 3, input.get_shape()[3], k])
+
+    padded = tf.pad(input, [[0,0],[1,1],[1,1],[0,0]], 'REFLECT')
+    conv = tf.nn.conv2d(padded, weights,
+        strides=[1, 1, 1, 1], padding='VALID')
+
+    normalized = _norm(conv, is_training, norm)
+    output = normalized
+    if activation == 'relu':
+      output = tf.nn.relu(normalized)
+    if activation == 'tanh':
+      output = tf.nn.tanh(normalized)
+    return output
+
 def dk(input, k, reuse=False, norm='instance', is_training=True, name=None):
   """ A 3x3 Convolution-BatchNorm-ReLU layer with k filters and stride 2
   Args:
