@@ -60,7 +60,7 @@ train_arg.add_argument('--fit_dataset', type=str2bool, default=False)
 train_arg.add_argument('--pretrained_gen', type=str, default='pretrained_models/gen')
 train_arg.add_argument('--save_syn_dataset', type=str, default='generated')
 train_arg.add_argument('--save_fitting', type=str, default='fitting')
-train_arg.add_argument('--pretrained_rec', type=str, default='facenet_model/model-20171209-014331.ckpt-80000', help='Pretrained facenet model')
+train_arg.add_argument('--pretrained_rec', type=str, default='facenet_model/model-20171214-014943.ckpt-80000', help='Pretrained facenet model')
 
 train_arg.add_argument('--task', type=str, default=get_branch_name(), help='default branch name')
 train_arg.add_argument('--is_train', type=str2bool, default=True)
@@ -125,7 +125,7 @@ parser.add_argument('--pretrained_model', type=str,
                     help='Load a pretrained model before training starts.')
 parser.add_argument('--model_def', type=str,
                     help='Model definition. Points to a module containing the definition of the inference graph.',
-                    default='models.inception_resnet_v1')
+                    default='models.nn4')
 parser.add_argument('--max_nrof_epochs', type=int,
                     help='Number of epochs to run.', default=500)
 parser.add_argument('--image_size', type=int,

@@ -373,12 +373,10 @@ class Trainer(object):
                     self.x_all.append(x)
 
                     C_input = tf.image.resize_bilinear(self.x, [160, 160])
-                    offset = 0
-                    startdim = 64
                     if self.config.input_scale_size == 108:
-                        offset = 4
-                        startdim = 96
-                    C_input = tf.image.crop_to_bounding_box(self.x, offset, offset, startdim, startdim)
+                        C_input = tf.image.crop_to_bounding_box(self.x, 4, 4, 96, 96)
+                    elif self.config.input_scale_size == 64:
+                        C_input = tf.image.resize_bilinear (self.x,[96,96])
                     C_input = tf.map_fn(lambda frame: tf.image.per_image_standardization(frame), C_input)
                     C = ModuleC(self.config)
                     self.c_loss, self.C_var, self.C_logits_var, self.centroids, c_loss_each = \
