@@ -3,6 +3,7 @@ test*
 data/hand
 data/gaze
 data/*
+facenet_model
 samples
 outputs
 .idea
