@@ -373,11 +373,11 @@ class Trainer(object):
                     self.y = denorm_img(y)
                     self.x_all.append(x)
 
-                    C_input = tf.image.resize_bilinear(self.x, [160, 160])
+                    #C_input = tf.image.resize_bilinear(self.x, [160, 160])
                     if self.config.input_scale_size == 108:
                         #C_input = tf.image.crop_to_bounding_box(self.x, 4, 4, 96, 96)
-                        C_input = tf.py_func(facenet.random_rotate_image, [C_input], tf.uint8)
-                        C_input = tf.random_crop(self.x, [int(self.x.shape[0]),96,96, 3])
+                        C_input = tf.py_func(facenet.random_rotate_image, [self.x], tf.uint8)
+                        C_input = tf.random_crop(C_input, [int(C_input.shape[0]),96,96, 3])
                         C_input = tf.map_fn(lambda img: tf.image.random_flip_left_right(img), C_input)
                     elif self.config.input_scale_size == 64:
                         C_input = tf.image.resize_bilinear (self.x,[96,96])
