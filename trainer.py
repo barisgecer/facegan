@@ -19,6 +19,7 @@ import pickle
 import os.path
 import facenet.src.facenet as facenet
 from PIL import Image
+from tensorflow.contrib import image
 
 #denemes
 def next(loader):
@@ -373,14 +374,9 @@ class Trainer(object):
                     self.y = denorm_img(y)
                     self.x_all.append(x)
 
-                    def random_rotate_image(image):
-                        angle = np.random.uniform(low=-10.0, high=10.0)
-                        return np.float32(scipy.misc.imrotate(image, angle, 'bicubic'))/255
-
                     if self.config.input_scale_size == 108:
-                        C_input = tf.map_fn(lambda img: tf.py_func(random_rotate_image, [img], tf.float32), self.x)
+                        C_input = image.rotate(self.x,tf.random_uniform([int(self.x.shape[0])], minval=-0.174533, maxval=0.174533),'BILINEAR')
                         C_input = tf.random_crop(C_input, [int(self.x.shape[0]),96,96, 3])
-                        C_input = tf.map_fn(lambda img: tf.image.random_flip_left_right(img), C_input)
                     elif self.config.input_scale_size == 64:
                         C_input = tf.image.resize_bilinear (self.x,[96,96])
                     C_input = tf.map_fn(lambda frame: tf.image.per_image_standardization(frame), C_input)
