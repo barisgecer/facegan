@@ -406,7 +406,8 @@ class Trainer(object):
                         balance = self.gamma * d_loss_real - g_loss
                         return d_loss, g_loss, balance, D_var, AE_x1 , AE_u, tf.reduce_mean(tf.abs(AE_x - x),[1,2,3])
 
-                    #self.p_loss = tf.reduce_mean(tf.abs(real_image_norm - x_))
+                    mask = tf.cast(tf.greater(self.syn_image[gpu_ind], 0), tf.float32)
+                    self.p_loss = tf.reduce_mean(mask * tf.abs(x - syn_image))
                     self.s_loss = tf.reduce_mean(tf.abs(syn_image - y))
 
                     sd_loss_real_forw = tf.reduce_mean(tf.abs(paired_y - norm_img(self.annot_3dmm[gpu_ind])))
@@ -425,17 +426,19 @@ class Trainer(object):
                     #self.reg_optim = g_optimizer.minimize(self.reg_loss, global_step=self.step,var_list=self.G_inv_var )
                     if self.config.method_c == 'softmax':
                         g_optim = g_optimizer.compute_gradients(
-                            g_loss_forw + self.config.lambda_c * self.c_loss + self.config.lambda_s * (self.s_loss),
-                            var_list=self.G_var + self.C_logits_var)
+                            g_loss_forw + self.config.lambda_c * self.c_loss + self.config.lambda_s * self.s_loss +
+                            self.config.lambda_p * self.p_loss, var_list=self.G_var + self.C_logits_var)
                     elif self.config.method_c == 'none':
-                        g_optim = g_optimizer.compute_gradients(g_loss_forw + self.config.lambda_s * (self.s_loss),var_list=self.G_var)
+                        g_optim = g_optimizer.compute_gradients(g_loss_forw + self.config.lambda_s * self.s_loss +
+                                                                self.config.lambda_p * self.p_loss, var_list=self.G_var)
                     else:
                         g_optim = g_optimizer.compute_gradients(
-                            g_loss_forw + self.config.lambda_c * self.c_loss + self.config.lambda_s * (self.s_loss),
-                            var_list=self.G_var)
+                            g_loss_forw + self.config.lambda_c * self.c_loss + self.config.lambda_s * self.s_loss +
+                            self.config.lambda_p * self.p_loss, var_list=self.G_var)
 
-
-                    g_inv_optim = g_inv_optimizer.compute_gradients(g_loss_back + self.config.lambda_d*sd_loss_forw + self.config.lambda_s *(self.s_loss), var_list=self.G_inv_var )
+                    g_inv_optim = g_inv_optimizer.compute_gradients(g_loss_back + self.config.lambda_d*sd_loss_forw +
+                                                                    self.config.lambda_s *(self.s_loss),
+                                                                    var_list=self.G_inv_var )
 
                     d_optim = d_optimizer.compute_gradients(self.d_loss, var_list=D_var_forw + D_var_back)
 
@@ -480,7 +483,7 @@ class Trainer(object):
                             tf.summary.scalar("loss/d_loss", self.d_loss),
                             tf.summary.scalar("loss/s_loss", self.s_loss),
                             #tf.summary.scalar("loss/pixel_loss", pixel_loss),
-                            #tf.summary.scalar("loss/p_loss", self.p_loss),
+                            tf.summary.scalar("loss/p_loss", self.p_loss),
                             tf.summary.scalar("loss/g_loss", self.g_loss),
                             tf.summary.scalar("loss/g_loss_back", g_loss_back),
                             tf.summary.scalar("loss/c_loss", self.c_loss),
