@@ -375,7 +375,7 @@ class Trainer(object):
                     self.x_all.append(x)
 
                     if self.config.input_scale_size == 108:
-                        C_input = image.rotate(self.x,tf.random_uniform([int(self.x.shape[0])], minval=-0.174533, maxval=0.174533),'BILINEAR')
+                        C_input = image.rotate(self.x,tf.random_uniform([int(self.x.shape[0])], minval=-0.174533/2, maxval=0.174533/2),'BILINEAR')
                         C_input = tf.random_crop(C_input, [int(self.x.shape[0]),96,96, 3])
                     elif self.config.input_scale_size == 64:
                         C_input = tf.image.resize_bilinear (self.x,[96,96])
