@@ -245,21 +245,29 @@ class Trainer(object):
     def generate_dataset(self):
         with open(self.config.syn_data_dir +"/list.txt", "rb") as fp:
             paths = pickle.load(fp)
+        with open(self.config.syn_data_dir +"/labels.txt", "rb") as fp:
+            labels = pickle.load(fp)
 
         save_dir = os.path.join(self.config.data_dir, self.config.save_syn_dataset)
         os.makedirs(save_dir,exist_ok=True)
         self.prepare_session(self.gen_var)
+        confidence = np.empty((0,4), str)
         for i in range(0,len(paths),self.config.batch_size):
             pa = paths[i:min(i + self.config.batch_size, len(paths))]
             inputs = np.array([cv2.imread(pa[j])[..., ::-1] for j in np.arange(len(pa))])
-            result = self.sess.run([self.x,self.d_score,self.s_score,self.c_score], {self.syn_image: inputs})
+            result = self.sess.run([self.x,self.d_score,self.s_score,self.c_score], {self.syn_image: inputs,self.syn_label: labels[i:min(i + self.config.batch_size, len(paths))]})
             x = result[0]
             d_score = result[1]
             s_score = result[2]
             c_score = result[3]
+            im_paths = np.array([])
             for im in range(len(x)):
                 os.makedirs(os.path.dirname(pa[im].replace(self.config.syn_data_dir,save_dir)),exist_ok=True)
                 Image.fromarray(x[im].astype(np.uint8)).save(pa[im].replace(self.config.syn_data_dir,save_dir))
+                im_paths = np.append(im_paths,pa[im].replace(self.config.syn_data_dir, save_dir))
+            confidence = np.append(confidence,np.transpose(np.vstack((im_paths,d_score,s_score,c_score))), axis=0)
+
+            np.savetxt(save_dir + '\\confidence_scores.csv',confidence,fmt='%s %s %s %s',delimiter=",")
 
     def fit_dataset(self):
         with open(self.config.data_path +"/list.txt", "rb") as fp:
