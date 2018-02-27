@@ -128,8 +128,8 @@ class Trainer(object):
         self.reset_g_lr = tf.assign(self.g_lr, self.config.g_lr)
         self.reset_d_lr = tf.assign(self.d_lr, self.config.d_lr)
         self.reset_lambda_c = tf.assign(self.lambda_c, self.config.lambda_c)
+        self.is_train = ((not config.train_generator) | (config.load_path != ''))&(config.load_path != '')
 
-        self.is_train = True#config.is_train
         self.gen_var, c_var, variable_averages = self.build_model()
 
         self.summary_writer = tf.summary.FileWriter(self.model_dir)
@@ -145,14 +145,12 @@ class Trainer(object):
                 #    config.pretrained_gen = self.config.log_dir + '/' + self.load_path +'/'+ data.split("\"")[1]
                 #else:
                 config.pretrained_gen = data.split("\"")[1]
-            else:
-                self.is_train = False
             variables_to_restore = variable_averages.variables_to_restore()
             #variables_to_restore = {k: v for k, v in variables_to_restore.items() if v.name != self.centroids.name}
-            self.pre_train_saver_avg = tf.train.Saver(variables_to_restore)
+            self.pre_train_saver_avg = tf.train.Saver({k: v for k,v in variables_to_restore.items() if 'InceptionResnetV1' not in k})
             all_variables = tf.global_variables()
             #all_variables = {v for v in all_variables if v.name != self.centroids.name}
-            self.pre_train_saver_all = tf.train.Saver(all_variables)
+            self.pre_train_saver_all = tf.train.Saver({v for v in all_variables if 'InceptionResnetV1' not in v.name})
 
         def load_pretrain(sess):
             if (not config.train_generator) | (config.load_path != '') :
@@ -274,7 +272,7 @@ class Trainer(object):
             for im in range(len(x)):
                 os.makedirs(os.path.dirname(pa[im].replace(self.config.syn_data_dir,save_dir)),exist_ok=True)
                 Image.fromarray(x[im].astype(np.uint8)).save(pa[im].replace(self.config.syn_data_dir,save_dir))
-                im_paths = np.append(im_paths,pa[im].replace(self.config.syn_data_dir, save_dir))
+                im_paths = np.append(im_paths,pa[im].replace(self.config.syn_data_dir, ''))
             confidence = np.append(confidence,np.transpose(np.vstack((im_paths,d_score,s_score,c_score))), axis=0)
             if counter%100 ==0:
                 np.savetxt(save_dir + '//confidence_scores.csv',confidence,fmt='%s %s %s %s',delimiter=",")
@@ -394,14 +392,17 @@ class Trainer(object):
                     self.x_all.append(x)
 
                     if self.config.input_scale_size == 108:
-                        C_input = tf.random_crop(self.x, [int(self.x.shape[0]),96,96, 3])
-                        C_input = tf.map_fn(lambda img: tf.image.random_flip_left_right(img), C_input)
+                        if self.is_train:
+                            C_input = tf.random_crop(self.x, [int(self.x.shape[0]),96,96, 3])
+                            C_input = tf.map_fn(lambda img: tf.image.random_flip_left_right(img), C_input)
+                        else:
+                            C_input = tf.image.crop_to_bounding_box( self.x, 6, 6, 96, 96)
                     elif self.config.input_scale_size == 64:
                         C_input = tf.image.resize_bilinear (self.x,[96,96])
                     C_input = tf.map_fn(lambda frame: tf.image.per_image_standardization(frame), C_input)
                     C = ModuleC(self.config)
-                    self.c_loss, self.C_var, self.C_logits_var, self.centroids, c_loss_each = \
-                        C.getNetwork(image=C_input, label_batch=self.syn_label[gpu_ind], nrof_classes=self.n_id,reuse=reuse_vars)
+                    self.c_loss, self.C_var, self.C_logits_var, self.centroids, c_loss_each, self.embeddings = \
+                        C.getNetwork(image=C_input, label_batch=self.syn_label[gpu_ind], nrof_classes=self.n_id,reuse=reuse_vars,is_train=self.is_train)
 
                     def D(name,x, real_image_norm, k_t,conv_hidden_num = 64, reuse=False, two_x = False):
                         # TO-DO: Patch-based Discriminator
@@ -549,7 +550,7 @@ class Trainer(object):
                 #self.k_update4 = tf.assign(
                 #    self.k_t4, tf.clip_by_value(self.k_t4 + self.lambda_k * (balance4), 0, 1))
 
-        return self.G_var + self.G_inv_var , self.C_var, variable_averages#, self.G_inv_var, self.G_var
+        return self.G_var + self.G_inv_var + [self.centroids] , self.C_var, variable_averages#, self.G_inv_var, self.G_var
 
     def generate(self, inputs, alpha_id_fix, root_path=None, path=None, idx=None, save=True):
         with tf.device('/gpu:0'):

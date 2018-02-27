@@ -14,7 +14,7 @@ class ModuleC(object):
         self.network = importlib.import_module('facenet.src.'+config.model_def)
 
 
-    def getNetwork(self,image, nrof_classes, label_batch, reuse= False):
+    def getNetwork(self,image, nrof_classes, label_batch, reuse= False, is_train= True):
         # Build the inference graph
         prelogits, _ = self.network.inference(image, self.config.keep_probability, phase_train = False, bottleneck_layer_size=self.config.embedding_size, weight_decay=self.config.weight_decay, reuse=reuse)
         logits = slim.fully_connected(prelogits, nrof_classes, activation_fn=None,
@@ -41,17 +41,17 @@ class ModuleC(object):
             regularization_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
             total_loss = tf.add_n([cross_entropy_mean], name='total_loss')
         elif self.config.method_c == 'magnet':
-            total_loss,c_loss_each = magnet_loss(embeddings,label_batch,nrof_classes,centroids,center_alpha=self.config.center_loss_alfa)
+            total_loss,c_loss_each = magnet_loss(embeddings,label_batch,nrof_classes,centroids,center_alpha=self.config.center_loss_alfa,is_train=is_train)
         elif self.config.method_c == 'center':
             total_loss,_ = center_loss(embeddings, label_batch,centroids, self.config.center_loss_alfa, nrof_classes)
 
         variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.config.facenet_scope)
 
-        return total_loss, variables, logit_variables, centroids, c_loss_each
+        return total_loss, variables, logit_variables, centroids, c_loss_each, embeddings
 
 
 
-def magnet_loss(features, classes, nrof_classes, centroids, alpha=1.0, center_alpha=0.95):
+def magnet_loss(features, classes, nrof_classes, centroids, alpha=1.0, center_alpha=0.95, is_train= True):
     """Compute magnet loss.
 
     Given a tensor of features `r`, the assigned class for each example,
@@ -75,6 +75,8 @@ def magnet_loss(features, classes, nrof_classes, centroids, alpha=1.0, center_al
     """
 
     classes = tf.reshape(classes, [-1])
+    if not is_train:
+        center_alpha = 1.0
     centers_batch = tf.gather(centroids, classes)
     diff = (1 - center_alpha) * (centers_batch - features)
     centroids = tf.scatter_sub(centroids, classes, diff)

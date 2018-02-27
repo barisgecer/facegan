@@ -63,7 +63,7 @@ def get_syn_loader(root, batch_size, scale_size, data_format, config=None, is_gr
             labels = pickle.load(fp)
     else:
         for ext in ["jpg", "png"]:
-            paths = glob("{}/*/*.{}".format(root, ext))
+            paths = sorted(glob("{}/*/*.{}".format(root, ext)))
             if len(paths) != 0:
                 with open(root +"/list.txt", "wb") as fp:
                     pickle.dump(paths, fp)
