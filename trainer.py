@@ -128,7 +128,10 @@ class Trainer(object):
         self.reset_g_lr = tf.assign(self.g_lr, self.config.g_lr)
         self.reset_d_lr = tf.assign(self.d_lr, self.config.d_lr)
         self.reset_lambda_c = tf.assign(self.lambda_c, self.config.lambda_c)
-        self.is_train = ((not config.train_generator) | (config.load_path != ''))&(config.load_path != '')
+        self.is_train = True
+        if (not config.train_generator) | (config.load_path != '') :
+            if not (config.load_path != ''):
+                self.is_train = False
 
         self.gen_var, c_var, variable_averages = self.build_model()
 
