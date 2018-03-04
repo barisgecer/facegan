@@ -41,7 +41,7 @@ class ModuleC(object):
             regularization_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
             total_loss = tf.add_n([cross_entropy_mean], name='total_loss')
         elif self.config.method_c == 'magnet':
-            total_loss,c_loss_each = magnet_loss(embeddings,label_batch,nrof_classes,centroids,center_alpha=self.config.center_loss_alfa,is_train=is_train)
+            total_loss,c_loss_each,centroids = magnet_loss(embeddings,label_batch,nrof_classes,centroids,center_alpha=self.config.center_loss_alfa,is_train=is_train)
         elif self.config.method_c == 'center':
             total_loss,_ = center_loss(embeddings, label_batch,centroids, self.config.center_loss_alfa, nrof_classes)
 
@@ -79,7 +79,6 @@ def magnet_loss(features, classes, nrof_classes, centroids, alpha=1.0, center_al
         center_alpha = 1.0
     centers_batch = tf.gather(centroids, classes)
     diff = (1 - center_alpha) * (centers_batch - features)
-    centroids = tf.scatter_sub(centroids, classes, diff)
 
     # Helper to compute boolean mask for distance comparisons
     def comparison_mask(a_labels, b_labels):
@@ -112,7 +111,9 @@ def magnet_loss(features, classes, nrof_classes, centroids, alpha=1.0, center_al
     losses = tf.nn.relu(-tf.log(numerator / (denominator + epsilon) + epsilon))
     total_loss = tf.reduce_mean(losses)
 
-    return total_loss, losses
+    centroids = tf.scatter_sub(centroids, classes, diff)
+
+    return total_loss, losses, centroids
 
 
 def center_loss(features, label,centers, alfa, nrof_classes):
