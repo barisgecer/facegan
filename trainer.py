@@ -389,9 +389,12 @@ class Trainer(object):
                     #syn_image_noise = tf.concat(syn_image, tf.random_normal((tf.shape(syn_image)[1], tf.shape(syn_image)[2])),3)
                     #y_noise_ = tf.concat(y_, tf.random_normal((tf.shape(y_)[1], tf.shape(y_)[2])),3)
                     x = G(syn_image)
-                    y, paired_y = tf.split(G_inv(tf.concat([x,norm_img(self.image_3dmm[gpu_ind])],0)),2)
+                    y, paired_y, real_y = tf.split(G_inv(tf.concat([x,norm_img(self.image_3dmm[gpu_ind]),real_image_norm],0)),3)
+                    real_x = G(real_y)
                     self.x = denorm_img(x)
+                    self.real_x = denorm_img(real_x)
                     self.y = denorm_img(y)
+                    self.real_y = denorm_img(real_y)
                     self.x_all.append(x)
 
                     if self.config.input_scale_size == 108:
@@ -431,15 +434,15 @@ class Trainer(object):
 
                     mask = tf.cast(tf.greater(self.syn_image[gpu_ind], 0), tf.float32)
                     self.p_loss = tf.reduce_mean(tf.sqrt(tf.reduce_mean(mask * (x - syn_image)**2,axis=[1,2,3])))
-                    self.s_loss = tf.reduce_mean(tf.abs(syn_image - y))
+                    self.s_loss = tf.reduce_mean(tf.abs(syn_image - y)) + tf.reduce_mean(tf.abs(real_x-real_image_norm))
 
                     sd_loss_real_forw = tf.reduce_mean(tf.abs(paired_y - norm_img(self.annot_3dmm[gpu_ind])))
                     sd_loss_forw = sd_loss_real_forw - self.k_t3 * self.s_loss
                     balance3 = self.gamma * sd_loss_real_forw - self.s_loss
 
-                    d_loss_forw, g_loss_forw, balance, D_var_forw, self.AE_x, self.AE_u, g_loss_forw_each = D("D_forw",x,real_image_norm, self.k_t, self.conv_hidden_num, two_x=False)
+                    d_loss_forw, g_loss_forw, balance, D_var_forw, self.AE_x, self.AE_u, g_loss_forw_each = D("D_forw",tf.concat([x,real_x],0), real_image_norm, self.k_t, self.conv_hidden_num, two_x=True)
 
-                    d_loss_back, g_loss_back, balance2, D_var_back, _, _, _ = D("D_back",y, syn_image, self.k_t2, two_x=False)
+                    d_loss_back, g_loss_back, balance2, D_var_back, _, _, _ = D("D_back",tf.concat([y,real_y],0), syn_image, self.k_t2, two_x=True)
                     self.g_loss = g_loss_forw + g_loss_back
                     self.d_loss = d_loss_forw + d_loss_back
                     # Optimization
@@ -489,7 +492,9 @@ class Trainer(object):
                         self.summary_op = tf.summary.merge([
                             tf.summary.image("Real Images", self.real_image[gpu_ind]),
                             tf.summary.image("Generated Images", self.x),
+                            tf.summary.image("Generated Images (Real)", self.real_x),
                             tf.summary.image("Generated Rendering", self.y),
+                            tf.summary.image("Generated Rendering (Real)", self.real_y),
                             #tf.summary.image("Intended Rendering", denorm_img(ren_p)),
                             tf.summary.image("Generated Rendering", denorm_img(y)),
                             #tf.summary.image("Regressor Input", self.image_3dmm),
