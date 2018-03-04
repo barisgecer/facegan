@@ -82,6 +82,7 @@ train_arg.add_argument('--lambda_d', type=float, default=0.5, help='')
 train_arg.add_argument('--lambda_s', type=float, default=0.5, help='')
 train_arg.add_argument('--lambda_p', type=float, default=0.1, help='')
 train_arg.add_argument('--lambda_c', type=float, default=0.001, help='')
+train_arg.add_argument('--lambda_r', type=float, default=0.1, help='')
 train_arg.add_argument('--lambda_c_upper', type=float, default=0.001, help='')
 
 train_arg.add_argument('--method_c', type=str, default="magnet",choices=['none','magnet','softmax','center'])

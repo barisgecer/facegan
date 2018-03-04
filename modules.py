@@ -17,18 +17,10 @@ class ModuleC(object):
     def getNetwork(self,image, nrof_classes, label_batch, reuse= False, is_train= True):
         # Build the inference graph
         prelogits, _ = self.network.inference(image, self.config.keep_probability, phase_train = False, bottleneck_layer_size=self.config.embedding_size, weight_decay=self.config.weight_decay, reuse=reuse)
-        logits = slim.fully_connected(prelogits, nrof_classes, activation_fn=None,
-                                      weights_initializer=tf.truncated_normal_initializer(stddev=0.1),
-                                      weights_regularizer=slim.l2_regularizer(self.config.weight_decay),
-                                      scope='Logits', reuse=reuse)
-
         embeddings = tf.nn.l2_normalize(prelogits, 1, 1e-10, name='embeddings')
+        embeddings_x, embeddings_real_x, embeddings_real = tf.split(embeddings,3)
 
-        # Calculate the average cross entropy loss across the batch
-        cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
-            labels=label_batch, logits=logits, name='cross_entropy_per_example')
-        cross_entropy_mean = tf.reduce_mean(cross_entropy, name='cross_entropy')
-        tf.add_to_collection('losses', cross_entropy_mean)
+
         logit_variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Logits')
         with tf.variable_scope("centroids", reuse=reuse):  # reuse the second time
             centroids = tf.get_variable('centers', [nrof_classes, self.config.embedding_size], dtype=tf.float32,
@@ -39,15 +31,17 @@ class ModuleC(object):
         # Calculate the total losses
         if self.config.method_c == 'softmax':
             regularization_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
-            total_loss = tf.add_n([cross_entropy_mean], name='total_loss')
+            total_loss = 0
         elif self.config.method_c == 'magnet':
-            total_loss,c_loss_each,centroids = magnet_loss(embeddings,label_batch,nrof_classes,centroids,center_alpha=self.config.center_loss_alfa,is_train=is_train)
+            total_loss,c_loss_each,centroids = magnet_loss(embeddings_x,label_batch,nrof_classes,centroids,center_alpha=self.config.center_loss_alfa,is_train=is_train)
         elif self.config.method_c == 'center':
-            total_loss,_ = center_loss(embeddings, label_batch,centroids, self.config.center_loss_alfa, nrof_classes)
+            total_loss,_ = center_loss(embeddings_x, label_batch,centroids, self.config.center_loss_alfa, nrof_classes)
+
+        real_loss = tf.sqrt(tf.reduce_mean((embeddings_real_x-embeddings_real)**2))
 
         variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.config.facenet_scope)
 
-        return total_loss, variables, logit_variables, centroids, c_loss_each, embeddings
+        return total_loss, variables, logit_variables, centroids, c_loss_each, embeddings_x, real_loss
 
 
 

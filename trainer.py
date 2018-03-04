@@ -397,9 +397,10 @@ class Trainer(object):
                     self.real_y = denorm_img(real_y)
                     self.x_all.append(x)
 
+                    C_input = tf.concat([self.x,self.real_x,self.real_image[gpu_ind]],0)
                     if self.config.input_scale_size == 108:
                         if self.is_train:
-                            C_input = tf.random_crop(self.x, [int(self.x.shape[0]),96,96, 3])
+                            C_input = tf.random_crop(C_input, [int(C_input.shape[0]),96,96, 3])
                             C_input = tf.map_fn(lambda img: tf.image.random_flip_left_right(img), C_input)
                         else:
                             C_input = tf.image.crop_to_bounding_box( self.x, 6, 6, 96, 96)
@@ -407,7 +408,7 @@ class Trainer(object):
                         C_input = tf.image.resize_bilinear (self.x,[96,96])
                     C_input = tf.map_fn(lambda frame: tf.image.per_image_standardization(frame), C_input)
                     C = ModuleC(self.config)
-                    self.c_loss, self.C_var, self.C_logits_var, self.centroids, c_loss_each, self.embeddings = \
+                    self.c_loss, self.C_var, self.C_logits_var, self.centroids, c_loss_each, self.embeddings, self.r_loss = \
                         C.getNetwork(image=C_input, label_batch=self.syn_label[gpu_ind], nrof_classes=self.n_id,reuse=reuse_vars,is_train=self.is_train)
 
                     def D(name,x, real_image_norm, k_t,conv_hidden_num = 64, reuse=False, two_x = False):
@@ -453,17 +454,17 @@ class Trainer(object):
                     if self.config.method_c == 'softmax':
                         g_optim = g_optimizer.compute_gradients(
                             g_loss_forw + self.config.lambda_c * self.c_loss + self.config.lambda_s * self.s_loss +
-                            self.config.lambda_p * self.p_loss, var_list=self.G_var + self.C_logits_var)
+                            self.config.lambda_p * self.p_loss+ self.config.lambda_r*self.r_loss, var_list=self.G_var + self.C_logits_var)
                     elif self.config.method_c == 'none':
                         g_optim = g_optimizer.compute_gradients(g_loss_forw + self.config.lambda_s * self.s_loss +
-                                                                self.config.lambda_p * self.p_loss, var_list=self.G_var)
+                                                                self.config.lambda_p * self.p_loss+ self.config.lambda_r*self.r_loss, var_list=self.G_var)
                     else:
                         g_optim = g_optimizer.compute_gradients(
                             g_loss_forw + self.config.lambda_c * self.c_loss + self.config.lambda_s * self.s_loss +
-                            self.config.lambda_p * self.p_loss, var_list=self.G_var)
+                            self.config.lambda_p * self.p_loss+ self.config.lambda_r*self.r_loss, var_list=self.G_var)
 
                     g_inv_optim = g_inv_optimizer.compute_gradients(g_loss_back + self.config.lambda_d*sd_loss_forw +
-                                                                    self.config.lambda_s *(self.s_loss),
+                                                                    self.config.lambda_s *(self.s_loss) + self.config.lambda_r*self.r_loss,
                                                                     var_list=self.G_inv_var )
 
                     d_optim = d_optimizer.compute_gradients(self.d_loss, var_list=D_var_forw + D_var_back)
@@ -513,6 +514,7 @@ class Trainer(object):
                             #tf.summary.scalar("loss/pixel_loss", pixel_loss),
                             tf.summary.scalar("loss/p_loss", self.p_loss),
                             tf.summary.scalar("loss/g_loss", self.g_loss),
+                            tf.summary.scalar("loss/r_loss", self.r_loss),
                             tf.summary.scalar("loss/g_loss_back", g_loss_back),
                             tf.summary.scalar("loss/c_loss", self.c_loss),
                             tf.summary.scalar("loss/sd_loss_forw", sd_loss_forw),
