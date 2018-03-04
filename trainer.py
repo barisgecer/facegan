@@ -441,9 +441,9 @@ class Trainer(object):
                     sd_loss_forw = sd_loss_real_forw - self.k_t3 * self.s_loss
                     balance3 = self.gamma * sd_loss_real_forw - self.s_loss
 
-                    d_loss_forw, g_loss_forw, balance, D_var_forw, self.AE_x, self.AE_u, g_loss_forw_each = D("D_forw",tf.concat([x,real_x],0), real_image_norm, self.k_t, self.conv_hidden_num, two_x=True)
+                    d_loss_forw, g_loss_forw, balance, D_var_forw, self.AE_x, self.AE_u, g_loss_forw_each = D("D_forw",x, real_image_norm, self.k_t, self.conv_hidden_num, two_x=False)
 
-                    d_loss_back, g_loss_back, balance2, D_var_back, _, _, _ = D("D_back",tf.concat([y,real_y],0), syn_image, self.k_t2, two_x=True)
+                    d_loss_back, g_loss_back, balance2, D_var_back, _, _, _ = D("D_back",real_y, syn_image, self.k_t2, two_x=False)
                     self.g_loss = g_loss_forw + g_loss_back
                     self.d_loss = d_loss_forw + d_loss_back
                     # Optimization
