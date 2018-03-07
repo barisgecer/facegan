@@ -61,9 +61,9 @@ def main(config):
         #    trainer.train_regressor()
         if config.train_generator | (config.cont == 'gen'):
             trainer.train()
-        if config.generate_dataset:
+        elif config.generate_dataset:
             trainer.generate_dataset()
-        if config.fit_dataset:
+        elif config.fit_dataset:
             trainer.fit_dataset()
     else:
         if not config.load_path:

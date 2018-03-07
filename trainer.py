@@ -166,8 +166,8 @@ class Trainer(object):
 
 
     def prepare_session(self, var_saved):
-        self.saver = tf.train.Saver(var_saved,max_to_keep=1)
-        sv = tf.train.Supervisor(logdir=self.model_dir,
+        self.saver = tf.train.Saver(var_saved,max_to_keep=2)
+        self.sv = tf.train.Supervisor(logdir=self.model_dir,
                                  is_chief=True,
                                  saver=self.saver,
                                  summary_op=None,
@@ -181,7 +181,7 @@ class Trainer(object):
         sess_config = tf.ConfigProto(allow_soft_placement=True,
                                      gpu_options=gpu_options)
 
-        self.sess = sv.prepare_or_wait_for_session(config=sess_config)
+        self.sess = self.sv.prepare_or_wait_for_session(config=sess_config)
 
     def train(self):
         self.prepare_session(None)
@@ -241,6 +241,8 @@ class Trainer(object):
             if (self.lr_update_step<1) or (step % self.lr_update_step == self.lr_update_step - 1):
                 self.sess.run([self.g_lr_update, self.d_lr_update, self.lambda_c_update])
                 self.lr_update_step = int(self.lr_update_step/2)
+
+        self.sv.saver.save(self.sess,self.sv.save_path)
 
     #TODO: images are kind of normalized fix it
     def generate_dataset(self):
