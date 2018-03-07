@@ -238,7 +238,7 @@ class Trainer(object):
                 x_fake = self.generate(fixed_image, fixed_label, self.model_dir, idx=step)
                 # self.autoencode(x_fixed, self.model_dir, idx=step, x_fake=x_fake)
 
-            if step % self.lr_update_step == self.lr_update_step - 1:
+            if (self.lr_update_step<1) or (step % self.lr_update_step == self.lr_update_step - 1):
                 self.sess.run([self.g_lr_update, self.d_lr_update, self.lambda_c_update])
                 self.lr_update_step = int(self.lr_update_step/2)
 
@@ -450,14 +450,14 @@ class Trainer(object):
                     if self.config.method_c == 'softmax':
                         g_optim = g_optimizer.compute_gradients(
                             g_loss_forw + self.config.lambda_c * self.c_loss + self.config.lambda_s * self.s_loss +
-                            self.config.lambda_p * self.p_loss, var_list=self.G_var + self.C_logits_var)
+                            self.config.lambda_p * self.p_loss, var_list=self.G_var +self.C_var+ self.C_logits_var)
                     elif self.config.method_c == 'none':
                         g_optim = g_optimizer.compute_gradients(g_loss_forw + self.config.lambda_s * self.s_loss +
                                                                 self.config.lambda_p * self.p_loss, var_list=self.G_var)
                     else:
                         g_optim = g_optimizer.compute_gradients(
                             g_loss_forw + self.config.lambda_c * self.c_loss + self.config.lambda_s * self.s_loss +
-                            self.config.lambda_p * self.p_loss, var_list=self.G_var)
+                            self.config.lambda_p * self.p_loss, var_list=self.G_var+self.C_var)
 
                     g_inv_optim = g_inv_optimizer.compute_gradients(g_loss_back + self.config.lambda_d*sd_loss_forw +
                                                                     self.config.lambda_s *(self.s_loss),
@@ -553,7 +553,7 @@ class Trainer(object):
                 #self.k_update4 = tf.assign(
                 #    self.k_t4, tf.clip_by_value(self.k_t4 + self.lambda_k * (balance4), 0, 1))
 
-        return self.G_var + self.G_inv_var + [self.centroids] , self.C_var, variable_averages#, self.G_inv_var, self.G_var
+        return self.G_var + self.G_inv_var , self.C_var, variable_averages#, self.G_inv_var, self.G_var
 
     def generate(self, inputs, alpha_id_fix, root_path=None, path=None, idx=None, save=True):
         with tf.device('/gpu:0'):
