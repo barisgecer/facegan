@@ -1,103 +1,83 @@
-# Code from https://github.com/david-berthelot/tf_img_tech/blob/master/tfswag/layers.py
-import numpy as N
-import numpy.linalg as LA
 import tensorflow as tf
+import tensorflow.contrib.slim as slim
+from tensorflow.contrib.framework import add_arg_scope
 
-__author__ = 'David Berthelot'
+SE_loss = tf.nn.sparse_softmax_cross_entropy_with_logits
 
+def int_shape(x):
+  return list(map(int, x.get_shape()[1: ]))
 
-def unboxn(vin, n):
-    """vin = (batch, h, w, depth), returns vout = (batch, n*h, n*w, depth), each pixel is duplicated."""
-    s = tf.shape(vin)
-    vout = tf.concat([vin] * (n ** 2), 0)  # Poor man's replacement for tf.tile (required for Adversarial Training support).
-    vout = tf.reshape(vout, [s[0] * (n ** 2), s[1], s[2], s[3]])
-    vout = tf.batch_to_space(vout, [[0, 0], [0, 0]], n)
-    return vout
+def normalize(layer):
+  return layer/127.5 - 1.
 
+def denormalize(layer):
+  return (layer + 1.)/2.
 
-def boxn(vin, n):
-    """vin = (batch, h, w, depth), returns vout = (batch, h//n, w//n, depth), each pixel is averaged."""
-    if n == 1:
-        return vin
-    s = tf.shape(vin)
-    vout = tf.reshape(vin, [s[0], s[1] // n, n, s[2] // n, n, s[3]])
-    vout = tf.reduce_mean(vout, [2, 4])
-    return vout
+def _update_dict(layer_dict, scope, layer):
+  name = "{}/{}".format(tf.get_variable_scope().name, scope)
+  layer_dict[name] = layer
 
+def image_from_paths(paths, shape, is_grayscale=True, seed=None):
+  filename_queue = tf.train.string_input_producer(list(paths), shuffle=False, seed=seed)
+  reader = tf.WholeFileReader()
+  filename, data = reader.read(filename_queue)
+  image = tf.image.decode_png(data, channels=3, dtype=tf.uint8)
+  if is_grayscale:
+    image = tf.image.rgb_to_grayscale(image)
+  image.set_shape(shape)
+  return filename, tf.to_float(image)
 
-class LayerBase:
-    pass
+@add_arg_scope
+def resnet_block(
+    inputs, scope, num_outputs=64, kernel_size=[3, 3],
+    stride=[1, 1], padding="SAME", layer_dict={}):
+  with tf.variable_scope(scope):
+    layer = conv2d(
+        inputs, num_outputs, kernel_size, stride,
+        padding=padding, activation_fn=tf.nn.relu, scope="conv1")
+    layer = conv2d(
+        layer, num_outputs, kernel_size, stride,
+        padding=padding, activation_fn=tf.nn.relu, scope="conv2")
+    layer = conv2d(
+        layer, num_outputs, kernel_size, stride,
+        padding=padding, activation_fn=None, scope="conv3")
+    outputs = tf.nn.relu(tf.add(inputs, layer))
+  _update_dict(layer_dict, scope, outputs)
+  return outputs
 
+@add_arg_scope
+def repeat(inputs, repetitions, layer, layer_dict={}, **kargv):
+  outputs = slim.repeat(inputs, repetitions, layer, **kargv)
+  _update_dict(layer_dict, kargv['scope'], outputs)
+  return outputs
 
-class LayerConv(LayerBase):
-    def __init__(self, name, w, n, nl=lambda x, y: x + y, strides=(1, 1, 1, 1),
-                 padding='SAME', conv=None, use_bias=True, data_format="NCHW"):
-        """w = (wy, wx), n = (n_in, n_out)"""
-        self.nl = nl
-        self.strides = list(strides)
-        self.padding = padding
-        self.data_format = data_format
-        with tf.name_scope(name):
-            if conv is None:
-                conv = tf.Variable(tf.truncated_normal([w[0], w[1], n[0], n[1]], stddev=0.01), name='conv')
-            self.conv = conv
-            self.bias = tf.Variable(tf.zeros([n[1]]), name='bias') if use_bias else 0
+@add_arg_scope
+def conv2d(inputs, num_outputs, kernel_size, stride,
+           layer_dict={}, activation_fn=None,
+           #weights_initializer=tf.random_normal_initializer(0, 0.001),
+           weights_initializer=tf.contrib.layers.xavier_initializer(),
+           scope=None, name="", **kargv):
+  outputs = slim.conv2d(
+      inputs, num_outputs, kernel_size,
+      stride, activation_fn=activation_fn, 
+      weights_initializer=weights_initializer,
+      biases_initializer=tf.zeros_initializer(dtype=tf.float32), scope=scope, **kargv)
+  if name:
+    scope = "{}/{}".format(name, scope)
+  _update_dict(layer_dict, scope, outputs)
+  return outputs
 
-    def __call__(self, vin):
-        return self.nl(tf.nn.conv2d(vin, self.conv, strides=self.strides,
-                                    padding=self.padding, data_format=self.data_format), self.bias)
+@add_arg_scope
+def max_pool2d(inputs, kernel_size=[3, 3], stride=[1, 1],
+               layer_dict={}, scope=None, name="", **kargv):
+  outputs = slim.max_pool2d(inputs, kernel_size, stride, **kargv)
+  if name:
+    scope = "{}/{}".format(name, scope)
+  _update_dict(layer_dict, scope, outputs)
+  return outputs
 
-class LayerEncodeConvGrowLinear(LayerBase):
-    def __init__(self, name, n, width, colors, depth, scales, nl=lambda x, y: x + y, data_format="NCHW"):
-        with tf.variable_scope(name) as vs:
-            encode = []
-            nn = n
-            for x in range(scales):
-                cl = []
-                for y in range(depth - 1):
-                    cl.append(LayerConv('conv_%d_%d' % (x, y), [width, width],
-                                        [nn, nn], nl, data_format=data_format))
-                cl.append(LayerConv('conv_%d_%d' % (x, depth - 1), [width, width],
-                                    [nn, nn + n], nl, strides=[1, 2, 2, 1], data_format=data_format))
-                encode.append(cl)
-                nn += n
-            self.encode = [LayerConv('conv_pre', [width, width], [colors, n], nl, data_format=data_format), encode]
-        self.variables = tf.contrib.framework.get_variables(vs)
-
-    def __call__(self, vin, carry=0, train=True):
-        vout = self.encode[0](vin)
-        for convs in self.encode[1]:
-            for conv in convs[:-1]:
-                vtmp = tf.nn.elu(conv(vout))
-                vout = carry * vout + (1 - carry) * vtmp
-            vout = convs[-1](vout)
-        return vout, self.variables
-
-
-class LayerDecodeConvBlend(LayerBase):
-    def __init__(self, name, n, width, colors, depth, scales, nl=lambda x, y: x + y, data_format="NCHW"):
-        with tf.variable_scope(name) as vs:
-            decode = []
-            for x in range(scales):
-                cl = []
-                n2 = 2 * n if x else n
-                cl.append(LayerConv('conv_%d_%d' % (x, 0), [width, width],
-                                    [n2, n], nl, data_format=data_format))
-                for y in range(1, depth):
-                    cl.append(LayerConv('conv_%d_%d' % (x, y), [width, width], [n, n], nl, data_format=data_format))
-                decode.append(cl)
-            self.decode = [decode, LayerConv('conv_post', [width, width], [n, colors], data_format=data_format)]
-        self.variables = tf.contrib.framework.get_variables(vs)
-
-    def __call__(self, data, carry, train=True):
-        vout = data
-        layers = []
-        for x, convs in enumerate(self.decode[0]):
-            vout = tf.concat([vout, data], 3) if x else vout
-            vout = unboxn(convs[0](vout), 2)
-            data = unboxn(data, 2)
-            for conv in convs[1:]:
-                vtmp = tf.nn.elu(conv(vout))
-                vout = carry * vout + (1 - carry) * vtmp
-            layers.append(vout)
-        return self.decode[1](vout), self.variables
+@add_arg_scope
+def tanh(inputs, layer_dict={}, name=None, **kargv):
+  outputs = tf.nn.tanh(inputs, name=name, **kargv)
+  _update_dict(layer_dict, name, outputs)
+  return outputs

@@ -35,7 +35,7 @@ class ModuleC(object):
                                         initializer=tf.constant_initializer(0), trainable=False)
 
         total_loss =  0
-        c_loss_each = 0
+        c_loss_each = cross_entropy
         # Calculate the total losses
         if self.config.method_c == 'softmax':
             regularization_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)

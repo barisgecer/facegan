@@ -2,6 +2,7 @@ import numpy as np
 import tensorflow as tf
 
 from trainer import Trainer
+from trainD import trainD
 from config import get_config
 from data_loader import *
 from utils import prepare_dirs_and_logger, save_config
@@ -51,7 +52,7 @@ def main(config):
     #        config.dataset_3dmm_test_dir, config.batch_size, config.syn_scale_size,
     #        config.data_format, config.split)
 
-        trainer = Trainer(config, data_loader,syn_image,syn_label, image_3dmm, annot_3dmm) #image_3dmm_test, annot_3dmm_test, latent_3dmm_test )
+        trainer = trainD(config, data_loader,syn_image,syn_label, image_3dmm, annot_3dmm) #image_3dmm_test, annot_3dmm_test, latent_3dmm_test )
 
     if config.is_train:
         save_config(config)
