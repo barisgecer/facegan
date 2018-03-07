@@ -65,7 +65,7 @@ train_arg.add_argument('--pretrained_rec', type=str, default='facenet_model/mode
 train_arg.add_argument('--task', type=str, default=get_branch_name(), help='default branch name')
 train_arg.add_argument('--is_train', type=str2bool, default=True)
 train_arg.add_argument('--optimizer', type=str, default='adam')
-train_arg.add_argument('--max_step', type=int, default=248000)
+train_arg.add_argument('--max_step', type=int, default=5000)
 train_arg.add_argument('--lr_update_step', type=int, default=128000)
 train_arg.add_argument('--warm_up', type=int, default=5000)
 train_arg.add_argument('--d_lr', type=float, default=0.00008)

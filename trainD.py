@@ -168,7 +168,7 @@ class trainD(object):
 
     def prepare_session(self, var_saved):
         self.saver = tf.train.Saver(var_saved,max_to_keep=1)
-        sv = tf.train.Supervisor(logdir=self.model_dir,
+        self.sv = tf.train.Supervisor(logdir=self.model_dir,
                                  is_chief=True,
                                  saver=self.saver,
                                  summary_op=None,
@@ -182,7 +182,7 @@ class trainD(object):
         sess_config = tf.ConfigProto(allow_soft_placement=True,
                                      gpu_options=gpu_options)
 
-        self.sess = sv.prepare_or_wait_for_session(config=sess_config)
+        self.sess = self.sv.prepare_or_wait_for_session(config=sess_config)
 
     def train(self):
         self.prepare_session(None)
@@ -242,6 +242,7 @@ class trainD(object):
             if step % self.lr_update_step == self.lr_update_step - 1:
                 self.sess.run([self.g_lr_update, self.d_lr_update, self.lambda_c_update])
                 self.lr_update_step = int(self.lr_update_step/2)
+        self.sv.saver.save(self.sess, self.sv.save_path)
 
     #TODO: images are kind of normalized fix it
     def generate_dataset(self):
@@ -275,10 +276,10 @@ class trainD(object):
             im_paths = np.array([])
             for im in range(len(x)):
                 os.makedirs(os.path.dirname(pa[im].replace(self.config.syn_data_dir,save_dir)),exist_ok=True)
-                Image.fromarray(x[im].astype(np.uint8)).save(pa[im].replace(self.config.syn_data_dir,save_dir))
+                #Image.fromarray(x[im].astype(np.uint8)).save(pa[im].replace(self.config.syn_data_dir,save_dir))
                 im_paths = np.append(im_paths,pa[im].replace(self.config.syn_data_dir, ''))
             confidence = np.append(confidence,np.transpose(np.vstack((im_paths,d_score,s_score,c_score))), axis=0)
-            if counter%100 ==0:
+            if counter%10 ==0:
                 np.savetxt(save_dir + '//confidence_scores.csv',confidence,fmt='%s %s %s %s',delimiter=",")
         np.savetxt(save_dir + '//confidence_scores.csv',confidence,fmt='%s %s %s %s',delimiter=",")
 
@@ -441,7 +442,7 @@ class trainD(object):
 
                     tower_grads_G.append(g_optim)
 
-                    s_scores.append(0)
+                    s_scores.append(tf.zeros_like(d_loss_each))
                     d_scores.append(d_loss_each)
                     c_scores.append(c_loss_each)
 
