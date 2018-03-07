@@ -85,6 +85,7 @@ train_arg.add_argument('--lambda_c', type=float, default=0.001, help='')
 train_arg.add_argument('--lambda_c_upper', type=float, default=0.001, help='')
 
 train_arg.add_argument('--method_c', type=str, default="magnet",choices=['none','magnet','softmax','center'])
+train_arg.add_argument('--relax_c', type=str2bool, default=False)
 # Misc
 misc_arg = add_argument_group('Misc')
 misc_arg.add_argument('--load_path', type=str, default='')

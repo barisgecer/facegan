@@ -449,17 +449,22 @@ class Trainer(object):
                     #self.ren_optim = g_optimizer.minimize(self.ren_loss, global_step=self.step,var_list=self.R_var )
 
                     #self.reg_optim = g_optimizer.minimize(self.reg_loss, global_step=self.step,var_list=self.G_inv_var )
+                    if self.config.relax_c:
+                        varlist = self.G_var + self.C_var
+                    else:
+                        varlist = self.G_var
+
                     if self.config.method_c == 'softmax':
                         g_optim = g_optimizer.compute_gradients(
                             g_loss_forw + self.config.lambda_c * self.c_loss + self.config.lambda_s * self.s_loss +
-                            self.config.lambda_p * self.p_loss, var_list=self.G_var+ self.C_logits_var)
+                            self.config.lambda_p * self.p_loss, var_list=varlist+ self.C_logits_var)
                     elif self.config.method_c == 'none':
                         g_optim = g_optimizer.compute_gradients(g_loss_forw + self.config.lambda_s * self.s_loss +
-                                                                self.config.lambda_p * self.p_loss, var_list=self.G_var)
+                                                                self.config.lambda_p * self.p_loss, var_list=varlist)
                     else:
                         g_optim = g_optimizer.compute_gradients(
                             g_loss_forw + self.config.lambda_c * self.c_loss + self.config.lambda_s * self.s_loss +
-                            self.config.lambda_p * self.p_loss, var_list=self.G_var)
+                            self.config.lambda_p * self.p_loss, var_list=varlist)
 
                     g_inv_optim = g_inv_optimizer.compute_gradients(g_loss_back + self.config.lambda_d*sd_loss_forw +
                                                                     self.config.lambda_s *(self.s_loss),
