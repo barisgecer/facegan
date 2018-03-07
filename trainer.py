@@ -450,14 +450,14 @@ class Trainer(object):
                     if self.config.method_c == 'softmax':
                         g_optim = g_optimizer.compute_gradients(
                             g_loss_forw + self.config.lambda_c * self.c_loss + self.config.lambda_s * self.s_loss +
-                            self.config.lambda_p * self.p_loss, var_list=self.G_var +self.C_var+ self.C_logits_var)
+                            self.config.lambda_p * self.p_loss, var_list=self.G_var+ self.C_logits_var)
                     elif self.config.method_c == 'none':
                         g_optim = g_optimizer.compute_gradients(g_loss_forw + self.config.lambda_s * self.s_loss +
                                                                 self.config.lambda_p * self.p_loss, var_list=self.G_var)
                     else:
                         g_optim = g_optimizer.compute_gradients(
                             g_loss_forw + self.config.lambda_c * self.c_loss + self.config.lambda_s * self.s_loss +
-                            self.config.lambda_p * self.p_loss, var_list=self.G_var+self.C_var)
+                            self.config.lambda_p * self.p_loss, var_list=self.G_var)
 
                     g_inv_optim = g_inv_optimizer.compute_gradients(g_loss_back + self.config.lambda_d*sd_loss_forw +
                                                                     self.config.lambda_s *(self.s_loss),
