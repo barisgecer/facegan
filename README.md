@@ -1,7 +1,7 @@
 #
-Semi-supervised Adversarial Learning to Generate Photorealistic Images of New Identities from 3D Morphable Model.
+Semi-supervised Adversarial Learning to Generate Photorealistic Face Images of New Identities from 3D Morphable Model.
 
-Submitted to CVPR 2018
+Submitted to ECCV 2018
 
 ## Usage
 
