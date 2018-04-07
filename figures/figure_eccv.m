@@ -1,5 +1,5 @@
 %% Histogram
-load('DrosteEffect-BrewerMap-213e65d\hist_syn.mat')
+load('hist_syn.mat')
 map = brewermap(3,'Set1'); 
 figure
 histf(dist_pos,0:.05:3,'facecolor',map(1,:),'facealpha',.5,'edgecolor','none')
@@ -15,7 +15,7 @@ title('Distribution of pairwise distances')
 set(findall(gcf,'-property','FontSize'),'FontSize',14)
 print('ours.eps','-dwinc')
 
-load('DrosteEffect-BrewerMap-213e65d\hist_lsfm.mat')
+load('hist_lsfm.mat')
 map = brewermap(3,'Set1'); 
 figure
 histf(dist_pos,0:.05:3,'facecolor',map(1,:),'facealpha',.5,'edgecolor','none')
@@ -31,7 +31,7 @@ title('Distribution of pairwise distances')
 set(findall(gcf,'-property','FontSize'),'FontSize',14)
 print('syn.eps','-dwinc')
 
-load('DrosteEffect-BrewerMap-213e65d\hist_vgg.mat')
+load('hist_vgg.mat')
 map = brewermap(3,'Set1'); 
 figure
 histf(dist_pos,0:.05:3,'facecolor',map(1,:),'facealpha',.5,'edgecolor','none')
@@ -49,6 +49,7 @@ print('vgg.eps','-dwinc')
 
 %%
 
+load('final.mat')
 func = @(in) strtok(in,'+-');
 final2 = str2double(cellfun(func,final(:,[2,7,8]),'UniformOutput',false));
 acc1 = cell2mat(final(end-2:-2:1,[1,4]));
@@ -65,24 +66,24 @@ xticklabels(x)
 legend('VGG+GANF Acc.','VGG+GANF 1-EER','VGG Acc.','VGG 1-EER','Location','southeast')
 xlabel('% of VGG dataset')
 axis([1,3,0.855,0.955])
-set(findall(gcf,'-property','FontSize'),'FontSize',12)
+set(findall(gcf,'-property','FontSize'),'FontSize',14)
 title('LFW Scores')
 grid on
 print('acc.eps','-dwinc')
 
 
 figure
-axes('ColorOrder',brewermap(3,'Set1'),'NextPlot','replacechildren')
+axes('ColorOrder',brewermap(2,'Set1'),'NextPlot','replacechildren')
 x = [20,50,100];
-plot(1:3,far2,1:3,far1,'--','linewidth',1);
+plot(1:3,far2(:,1:2),1:3,far1(:,1:2),'--','linewidth',1);
 xticks(1:3)
 xticklabels(x) 
-legend('VGG+GANF IJB-A@FAR=1e-2','VGG+GANF IJB-A@FAR=1e-3','VGG+GANF LFW@FAR=1e-3','VGG IJB-A@FAR=1e-2','VGG IJB-A@FAR=1e-3','VGG LFW@FAR=1e-3','Location','northwest')
+legend('VGG+GANF IJB-A@FAR=1e-2','VGG+GANF IJB-A@FAR=1e-3','VGG IJB-A@FAR=1e-2','VGG IJB-A@FAR=1e-3','Location','southeast')
 xlabel('% of VGG dataset')
 ylabel('True Positive Rates')
-%axis([1,4,0.79,0.955])
-set(findall(gcf,'-property','FontSize'),'FontSize',10)
-title('Verification Scores (TPR) on LFW and IJB-A')
+axis([1,3,0.21,0.64])
+set(findall(gcf,'-property','FontSize'),'FontSize',14)
+title('IJB-A Scores')
 grid on
 print('tpr.eps','-dwinc')
 
