@@ -1,11 +1,9 @@
-#
-Semi-supervised Adversarial Learning to Generate Photorealistic Face Images of New Identities from 3D Morphable Model
-[[Arxiv]](https://arxiv.org/abs/1804.03675)
+# [Semi-supervised Adversarial Learning to Generate Photorealistic Face Images of New Identities from 3D Morphable Model](https://arxiv.org/abs/1804.03675)
 
-## Authors
  [Baris Gecer](http://barisgecer.github.io)<sup> 1</sup>, [Binod Bhattarai](https://sites.google.com/view/bbinod)<sup> 1</sup>, [Josef Kittler](https://www.surrey.ac.uk/people/josef-kittler)<sup> 2</sup>, & [Tae-Kyun Kim](https://www.imperial.ac.uk/people/tk.kim)<sup> 1</sup>
  <br/>
  <sup>1 </sup>Department of Electrical and Electronic Engineering, Imperial College London, UK
+ <br/>
  <sup>2 </sup>Centre for Vision, Speech and Signal Processing, University of Surrey, UK
 
 This repository provides a Tensorflow implementation of our study where we propose a novel end-to-end semi-supervised adversarial framework to generate photorealistic face images of new identities with wide ranges of expressions, poses, and illuminations conditioned by a 3D morphable model.
