@@ -13,8 +13,7 @@
 <p align="center"><img width="100%" src="figures/images/randomsample.png" /></p>
 
 
-
-<br/><br/><br/>
+<br/>
 (This documentation is still under construction, please refer to our paper for more details)
 <br/>
 ## Approach
@@ -23,6 +22,7 @@
 Our approach aims to synthesize photorealistic images conditioned by a given synthetic image by 3DMM. It regularizes cycle consistency by introducing an additional adversarial game between the two generator networks in an unsupervised fashion. Thus the under-constraint cycle loss is supervised to have correct matching between the two domains by the help of a limited number of paired data. We also encourage the generator to preserve face identity by a set-based supervision through a pretrained classification network.
 
 <br/>
+
 ## Dependencies
 * [TensorFlow 1.2](https://www.tensorflow.org/)
 * [Python 3.5](https://www.continuum.io/downloads)
@@ -73,4 +73,4 @@ this work is useful for your research, please cite our [paper](https://arxiv.org
 ## Acknowledgement
 This work was supported by the EPSRC Programme Grant ‘FACER2VM’ (EP/N007743/1). Baris Gecer is funded by the Turkish Ministry of National Education. This study is morally motivated to improve face recognition to help prediction of genetic disorders visible on human face in earlier stages.
 
-Code borrows heavily from [carpedm20 BEGAN implementation](https://github.com/carpedm20/began-tensorflow).
+Code borrows heavily from carpedm20's [BEGAN implementation](https://github.com/carpedm20/began-tensorflow).
