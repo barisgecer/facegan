@@ -16,6 +16,7 @@
 <br/>
 (This documentation is still under construction, please refer to our paper for more details)
 <br/>
+
 ## Approach
 
 <p align="center"><img width="100%" src="figures/images/overview.png" /></p>
