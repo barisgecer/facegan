@@ -6,22 +6,22 @@
  <br/>
  <sup>2 </sup>Centre for Vision, Speech and Signal Processing, University of Surrey, UK
 
-This repository provides a Tensorflow implementation of our study where we propose a novel end-to-end semi-supervised adversarial framework to generate photorealistic face images of new identities with wide ranges of expressions, poses, and illuminations conditioned by a 3D morphable model.
+**This repository provides a Tensorflow implementation of our study where we propose a novel end-to-end semi-supervised adversarial framework to generate photorealistic face images of new identities with wide ranges of expressions, poses, and illuminations conditioned by a 3D morphable model.**
 
 <br/>
 
 <p align="center"><img width="100%" src="figures/images/randomsample.png" /></p>
 
-<br/>
 
+
+<br/><br/><br/>
+(This documentation is still under construction, please refer to our paper for more details)
+<br/>
 ## Approach
 
 <p align="center"><img width="100%" src="figures/images/overview.png" /></p>
 Our approach aims to synthesize photorealistic images conditioned by a given synthetic image by 3DMM. It regularizes cycle consistency by introducing an additional adversarial game between the two generator networks in an unsupervised fashion. Thus the under-constraint cycle loss is supervised to have correct matching between the two domains by the help of a limited number of paired data. We also encourage the generator to preserve face identity by a set-based supervision through a pretrained classification network.
 
-
-
-(This documentation is still under construction, please refer to our paper for more details)
 <br/>
 ## Dependencies
 * [TensorFlow 1.2](https://www.tensorflow.org/)
