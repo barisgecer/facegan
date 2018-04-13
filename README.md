@@ -3,7 +3,8 @@ Semi-supervised Adversarial Learning to Generate Photorealistic Face Images of N
 [[Arxiv]](https://arxiv.org/abs/1804.03675)
 
 ## Authors
- [Baris Gecer](http://barisgecer.github.io)<sup> 1</sup>, [Binod Bhattarai](https://sites.google.com/view/bbinod)<sup> 1</sup>, [Josef Kittler](https://www.surrey.ac.uk/people/josef-kittler)<sup> 2</sup>, & [Tae-Kyun Kim](https://www.imperial.ac.uk/people/tk<sup> 1</sup>.kim)
+ [Baris Gecer](http://barisgecer.github.io)<sup> 1</sup>, [Binod Bhattarai](https://sites.google.com/view/bbinod)<sup> 1</sup>, [Josef Kittler](https://www.surrey.ac.uk/people/josef-kittler)<sup> 2</sup>, & [Tae-Kyun Kim](https://www.imperial.ac.uk/people/tk.kim)<sup> 1</sup>
+ <br/>
  <sup>1 </sup>Department of Electrical and Electronic Engineering, Imperial College London, UK
  <sup>2 </sup>Centre for Vision, Speech and Signal Processing, University of Surrey, UK
 
@@ -20,17 +21,17 @@ This repository provides a Tensorflow implementation of our study where we propo
 <p align="center"><img width="100%" src="figures/images/overview.png" /></p>
 Our approach aims to synthesize photorealistic images conditioned by a given synthetic image by 3DMM. It regularizes cycle consistency by introducing an additional adversarial game between the two generator networks in an unsupervised fashion. Thus the under-constraint cycle loss is supervised to have correct matching between the two domains by the help of a limited number of paired data. We also encourage the generator to preserve face identity by a set-based supervision through a pretrained classification network.
 
-<br/>
+
 
 (This documentation is still under construction, please refer to our paper for more details)
-
+<br/>
 ## Dependencies
 * [TensorFlow 1.2](https://www.tensorflow.org/)
 * [Python 3.5](https://www.continuum.io/downloads)
 
 ## Data
 
-* Generate synthetic images using any 3DMM model i.e. [LSFM](https://xip.uclb.com/i/healthcare_tools/LSFM.html) or [Basel Face Model](https://faces.cs.unibas.ch/bfm/)
+* Generate synthetic images using any 3DMM model i.e. [LSFM](https://xip.uclb.com/i/healthcare_tools/LSFM.html) or [Basel Face Model](https://faces.cs.unibas.ch/bfm/) by running gen_syn_latent.m
 * Align and crop all datasets using MTCNN to 108x108
 
 ## Usage
@@ -57,7 +58,7 @@ $ python main.py    --log_dir [path2_logdir] --data_dir [path2_datadir] --syn_da
 <br/>
 
 ## Citation
-f this work is useful for your research, please cite our [paper](https://arxiv.org/pdf/1804.03675.pdf):
+this work is useful for your research, please cite our [paper](https://arxiv.org/pdf/1804.03675.pdf):
 
 ```
 @article{gecer2018semisup,
