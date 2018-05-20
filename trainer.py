@@ -147,7 +147,7 @@ class Trainer(object):
                 #if os.name == 'nt':
                 #    config.pretrained_gen = self.config.log_dir + '/' + self.load_path +'/'+ data.split("\"")[1]
                 #else:
-                config.pretrained_gen = data.split("\"")[1]
+                config.pretrained_gen = data.split("\"")[1].replace('\\\\','/')
             variables_to_restore = variable_averages.variables_to_restore()
             #variables_to_restore = {k: v for k, v in variables_to_restore.items() if v.name != self.centroids.name}
             self.pre_train_saver_avg = tf.train.Saver({k: v for k,v in variables_to_restore.items() if 'InceptionResnetV1' not in k})
