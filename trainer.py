@@ -63,11 +63,12 @@ def slerp(val, low, high):
 
 
 class Trainer(object):
-    def __init__(self, config, real_image, syn_image, syn_label, image_3dmm, annot_3dmm):
+    def __init__(self, config, real_image, syn_image, syn_label,syn_path, image_3dmm, annot_3dmm):
         self.config = config
         self.real_image = real_image
         self.syn_image = syn_image
         self.syn_label = syn_label
+        self.syn_path = syn_path
         self.image_3dmm = image_3dmm
         self.annot_3dmm = annot_3dmm
         self.dataset = config.dataset
@@ -169,9 +170,9 @@ class Trainer(object):
         self.saver = tf.train.Saver(var_saved,max_to_keep=2)
         self.sv = tf.train.Supervisor(logdir=self.model_dir,
                                  is_chief=True,
-                                 saver=self.saver,
+                                 saver=None,
                                  summary_op=None,
-                                 summary_writer=self.summary_writer,
+                                 summary_writer=None,
                                  save_model_secs=300,
                                  global_step=self.step,
                                  ready_for_local_init_op=None,
@@ -266,22 +267,22 @@ class Trainer(object):
                 pa = paths[(len(paths) - self.config.batch_size):len(paths)]
                 labels_feed = labels[(len(paths) - self.config.batch_size):len(paths)]
                 begin_ind = self.config.batch_size - len(paths) + i
-            inputs = np.array([cv2.imread(pa[j])[..., ::-1] for j in np.arange(len(pa))])
-            result = self.sess.run([self.x,self.d_score,self.s_score,self.c_score], {self.syn_image: inputs,self.syn_label: labels_feed})
+            #inputs = np.array([cv2.imread(pa[j])[..., ::-1] for j in np.arange(len(pa))])
+            result = self.sess.run([self.x,self.syn_path])
             x = result[0][begin_ind:]
-            pa = pa[begin_ind:]
-            d_score = result[1][:,begin_ind:]
-            s_score = result[2][:,begin_ind:]
-            c_score = result[3][:,begin_ind:]
+            pa = result[1][begin_ind:]
+            #d_score = result[1][:,begin_ind:]
+            #s_score = result[2][:,begin_ind:]
+            #c_score = result[3][:,begin_ind:]
             im_paths = np.array([])
             for im in range(len(x)):
-                os.makedirs(os.path.dirname(pa[im].replace(self.config.syn_data_dir,save_dir)),exist_ok=True)
-                Image.fromarray(x[im].astype(np.uint8)).save(pa[im].replace(self.config.syn_data_dir,save_dir))
-                im_paths = np.append(im_paths,pa[im].replace(self.config.syn_data_dir, ''))
-            confidence = np.append(confidence,np.transpose(np.vstack((im_paths,d_score,s_score,c_score))), axis=0)
-            if counter%100 ==0:
-                np.savetxt(save_dir + '//confidence_scores.csv',confidence,fmt='%s %s %s %s',delimiter=",")
-        np.savetxt(save_dir + '//confidence_scores.csv',confidence,fmt='%s %s %s %s',delimiter=",")
+                os.makedirs(os.path.dirname(pa[im].decode("utf-8").replace(self.config.syn_data_dir,save_dir)),exist_ok=True)
+                Image.fromarray(x[im].astype(np.uint8)).save(pa[im].decode("utf-8").replace(self.config.syn_data_dir,save_dir))
+                im_paths = np.append(im_paths,pa[im].decode("utf-8").replace(self.config.syn_data_dir, ''))
+            #confidence = np.append(confidence,np.transpose(np.vstack((im_paths,d_score,s_score,c_score))), axis=0)
+            #if counter%100 ==0:
+            #    np.savetxt(save_dir + '//confidence_scores.csv',confidence,fmt='%s %s %s %s',delimiter=",")
+        #np.savetxt(save_dir + '//confidence_scores.csv',confidence,fmt='%s %s %s %s',delimiter=",")
 
     def fit_dataset(self):
         with open(self.config.data_path +"/list.txt", "rb") as fp:

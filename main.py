@@ -39,7 +39,7 @@ def main(config):
                 data_path, config.batch_size*config.num_gpu, config.input_scale_size,
                 config.data_format, config)
 
-        syn_image, syn_label, config.n_id = get_syn_loader(
+        syn_image, syn_label, config.n_id, syn_path = get_syn_loader(
                 config.syn_data_dir, config.batch_size*config.num_gpu, config.syn_scale_size,
                 config.data_format, config)
 
@@ -51,7 +51,7 @@ def main(config):
     #        config.dataset_3dmm_test_dir, config.batch_size, config.syn_scale_size,
     #        config.data_format, config.split)
 
-        trainer = Trainer(config, data_loader,syn_image,syn_label, image_3dmm, annot_3dmm) #image_3dmm_test, annot_3dmm_test, latent_3dmm_test )
+        trainer = Trainer(config, data_loader,syn_image,syn_label,syn_path, image_3dmm, annot_3dmm) #image_3dmm_test, annot_3dmm_test, latent_3dmm_test )
 
     if config.is_train:
         save_config(config)

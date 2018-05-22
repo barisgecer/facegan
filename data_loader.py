@@ -76,6 +76,10 @@ def get_syn_loader(root, batch_size, scale_size, data_format, config=None, is_gr
                 break
 
     n_id = max(labels)
+    labels_np = np.array(labels)
+    paths_np = np.array(paths)
+    labels = labels_np[(labels_np > 1903) & (labels_np < 5001)].tolist()
+    paths = paths_np[(labels_np > 1903) & (labels_np < 5001)].tolist()
 
     with Image.open(paths[0]) as img:
         w, h = img.size
@@ -104,12 +108,11 @@ def get_syn_loader(root, batch_size, scale_size, data_format, config=None, is_gr
     image.set_shape(shape)
 
     min_after_dequeue = 5000*config.num_gpu
-    capacity = min_after_dequeue + 3 * batch_size
+    capacity = 10 * batch_size
 
-    queue_image, queue_label = tf.train.shuffle_batch(
-        [image, label], batch_size=batch_size,
-        num_threads=4*config.num_gpu, capacity=capacity,
-        min_after_dequeue=min_after_dequeue, name='synthetic_inputs',seed=seed)
+    queue_image, queue_label, queue_path = tf.train.batch(
+        [image, label, input_queue[0]], batch_size=batch_size,
+        num_threads=4*config.num_gpu, capacity=capacity, name='synthetic_inputs')
 
     #queue_image = tf.image.crop_to_bounding_box(queue_image, 34, 34, 64, 64)
     #queue_image = tf.image.resize_bilinear(queue_image, [scale_size, scale_size])
@@ -121,7 +124,7 @@ def get_syn_loader(root, batch_size, scale_size, data_format, config=None, is_gr
     else:
         raise Exception("[!] Unkown data_format: {}".format(data_format))
 
-    return tf.to_float(queue_image), queue_label, n_id
+    return tf.to_float(queue_image), queue_label, n_id, queue_path
 
 
 def get_3dmm_loader(root, batch_size, scale_size, data_format, config=None, is_grayscale=False, seed=None):
