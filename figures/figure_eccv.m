@@ -75,13 +75,17 @@ print('acc.eps','-dwinc')
 figure
 axes('ColorOrder',brewermap(2,'Set1'),'NextPlot','replacechildren')
 x = [20,50,100];
-plot(1:3,far2(:,1:2),1:3,far1(:,1:2),'--','linewidth',1);
+yyaxis left
+plot(1:3,far2(:,2),1:3,far1(:,2),'--','linewidth',1);
+ylabel('True Positive Rates @FAR=1e-2')
+yyaxis right
+plot(1:3,far2(:,3),1:3,far1(:,3),'--','linewidth',1);
+ylabel('True Positive Rates @FAR=1e-3')
 xticks(1:3)
 xticklabels(x) 
-legend('VGG+GANF IJB-A@FAR=1e-2','VGG+GANF IJB-A@FAR=1e-3','VGG IJB-A@FAR=1e-2','VGG IJB-A@FAR=1e-3','Location','southeast')
+legend('VGG+GANF IJB-A@FAR=1e-2','VGG IJB-A@FAR=1e-2','VGG+GANF IJB-A@FAR=1e-3','VGG IJB-A@FAR=1e-3','Location','northwest')
 xlabel('% of VGG dataset')
-ylabel('True Positive Rates')
-axis([1,3,0.21,0.64])
+%axis([1,3,0.21,0.64])
 set(findall(gcf,'-property','FontSize'),'FontSize',14)
 title('IJB-A Scores')
 grid on
@@ -105,7 +109,7 @@ xticklabels(x)
 title('Distribution of the datasets when combined')
 set(findall(gcf,'-property','FontSize'),'FontSize',12)
 grid on
-print('dist.eps','-dwinc')
+%print('dist.eps','-dwinc')
 
 close all
 
