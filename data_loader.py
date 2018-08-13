@@ -78,8 +78,8 @@ def get_syn_loader(root, batch_size, scale_size, data_format, config=None, is_gr
     n_id = max(labels)
     labels_np = np.array(labels)
     paths_np = np.array(paths)
-    labels = labels_np[(labels_np > 1903) & (labels_np < 5001)].tolist()
-    paths = paths_np[(labels_np > 1903) & (labels_np < 5001)].tolist()
+    labels = labels_np[(labels_np > 0) & (labels_np < 10001)].tolist()
+    paths = paths_np[(labels_np > 0) & (labels_np < 10001)].tolist()
 
     with Image.open(paths[0]) as img:
         w, h = img.size
