@@ -50,6 +50,10 @@ $ python main.py    --log_dir [path2_logdir] --data_dir [path2_datadir] --syn_da
                     --save_syn_dataset [saving_dir] --train_generator False --generate_dataset True --pretrained_gen [path2_logdir + /model.ckpt]
 ```
 
+## Pretrained Model
+
+You can download the [pretrained model](https://drive.google.com/open?id=1CmEIUdyPoYNIZymz6UEKK3zcSrD6ei8U)
+
 ## More Results
 
 <p align="center"><img width="100%" src="figures/images/results.png" /></p>
