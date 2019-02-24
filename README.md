@@ -1,4 +1,4 @@
-# [Semi-supervised Adversarial Learning to Generate Photorealistic Face Images of New Identities from 3D Morphable Model](https://arxiv.org/abs/1804.03675)
+# [Semi-supervised Adversarial Learning to Generate Photorealistic Face Images of New Identities from 3D Morphable Model](http://openaccess.thecvf.com/content_ECCV_2018/papers/Baris_Gecer_Semi-supervised_Adversarial_Learning_ECCV_2018_paper.pdf)
 
  [Baris Gecer](http://barisgecer.github.io)<sup> 1</sup>, [Binod Bhattarai](https://sites.google.com/view/bbinod)<sup> 1</sup>, [Josef Kittler](https://www.surrey.ac.uk/people/josef-kittler)<sup> 2</sup>, & [Tae-Kyun Kim](https://www.imperial.ac.uk/people/tk.kim)<sup> 1</sup>
  <br/>
@@ -61,13 +61,14 @@ You can download the [pretrained model](https://www.dropbox.com/s/n6g0saf772jx9w
 <br/>
 
 ## Citation
-this work is useful for your research, please cite our [paper](https://arxiv.org/pdf/1804.03675.pdf):
+if you find this work is useful for your research, please cite our [paper](http://openaccess.thecvf.com/content_ECCV_2018/papers/Baris_Gecer_Semi-supervised_Adversarial_Learning_ECCV_2018_paper.pdf):
 
 ```
-@article{gecer2018semisup,
-  title={Semi-supervised Adversarial Learning to Generate Photorealistic Face Images of New Identities from 3D Morphable Model},
+@inproceedings{gecer2018semi,
+  title={Semi-supervised adversarial learning to generate photorealistic face images of new identities from 3D morphable model},
   author={Gecer, Baris and Bhattarai, Binod and Kittler, Josef and Kim, Tae-Kyun},
-  journal={arXiv preprint arXiv:1804.03675},
+  booktitle={Proceedings of the European Conference on Computer Vision (ECCV)},
+  pages={217--234},
   year={2018}
 }
 
