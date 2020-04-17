@@ -52,7 +52,7 @@ $ python main.py    --log_dir [path2_logdir] --data_dir [path2_datadir] --syn_da
 
 ## Pretrained Model
 
-You can download the [pretrained model](https://www.dropbox.com/s/n6g0saf772jx9w4/master_gen_0221_200317.zip?dl=0)
+You can download the [pretrained model](https://www.dropbox.com/s/r64gdbpfq1mfb0y/pretrained_facegan.zip?dl=0)
 
 ## More Results
 
